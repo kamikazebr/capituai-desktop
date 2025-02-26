@@ -4,7 +4,6 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { confirm } from '@tauri-apps/plugin-dialog';
 
 export function UpdateChecker() {
-  const [updateAvailable, setUpdateAvailable] = useState<Update | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -19,7 +18,6 @@ export function UpdateChecker() {
         console.log(
           `Nova atualização encontrada: ${update.version} de ${update.date} com notas: ${update.body}`
         );
-        setUpdateAvailable(update);
         
         // Pedir confirmação ao usuário
         const confirmed = await confirm(`Nova atualização disponível: v${update.version}\n\nNotas da versão: ${update.body}\n\nDeseja atualizar agora?`, {

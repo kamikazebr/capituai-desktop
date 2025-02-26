@@ -1,11 +1,11 @@
 type ProcessProgressProps = {
   currentStep: string;
-  progress: number; // Mantemos para compatibilidade, mas não usaremos esse valor
+  progress: number;
   isVisible: boolean;
   error: { step: string; message: string } | null;
 }
 
-export function ProcessProgress({ currentStep, progress, isVisible, error }: ProcessProgressProps) {
+export function ProcessProgress({ currentStep, isVisible, error }: ProcessProgressProps) {
   if (!isVisible) return null;
   
   const steps = [
