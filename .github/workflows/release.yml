@@ -69,5 +69,29 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
           args: ${{ matrix.args }}
+          includeUpdaterJson: true
+      
+      # Etapa adicional para criar o JSON manualmente se a ação falhar
+      - name: Create updater JSON manually
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          VERSION=$(grep -Po '"version": "\K[^"]*' src-tauri/tauri.conf.json)
+          SIG_CONTENT=$(cat src-tauri/target/release/bundle/deb/capitu-desktop_${VERSION}_amd64.deb.sig)
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/capitu-desktop_${VERSION}_amd64.deb"
+          
+          echo '{
+            "version": "'$VERSION'",
+            "notes": "See the assets to download this version and install.",
+            "pub_date": "'$(date --iso-8601=seconds)'",
+            "platforms": {
+              "linux-x86_64": {
+                "signature": "'$SIG_CONTENT'",
+                "url": "'$RELEASE_URL'"
+              }
+            }
+          }' > latest.json
+          
+          gh release upload v$VERSION latest.json --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
