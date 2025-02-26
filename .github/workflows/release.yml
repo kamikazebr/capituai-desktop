@@ -76,22 +76,60 @@ jobs:
       - name: Create updater JSON and upload to Gist
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          echo "===== INICIANDO PROCESSO DE ATUALIZAÇÃO DO GIST ====="
+          
+          echo "Conteúdo do tauri.conf.json:"
+          cat src-tauri/tauri.conf.json
+          
           VERSION=$(grep -Po '"version": "\K[^"]*' src-tauri/tauri.conf.json)
           echo "Versão encontrada: $VERSION"
+          
+          echo "Diretório atual: $(pwd)"
+          echo "Listando diretório do projeto:"
+          ls -la
+          
+          echo "Listando diretório target:"
+          ls -la src-tauri/target/ || echo "Diretório target não encontrado"
+          
+          echo "Listando diretório de release:"
+          ls -la src-tauri/target/release/ || echo "Diretório release não encontrado"
+          
+          echo "Listando diretório de bundle:"
+          ls -la src-tauri/target/release/bundle/ || echo "Diretório bundle não encontrado"
+          
+          echo "Listando arquivos .deb:"
+          find src-tauri/target/release/bundle -name "*.deb" || echo "Nenhum arquivo .deb encontrado"
+          
+          echo "Listando arquivos .sig:"
+          find src-tauri/target/release/bundle -name "*.sig" || echo "Nenhum arquivo .sig encontrado"
           
           # Verificar se o arquivo .sig existe
           SIG_PATH="src-tauri/target/release/bundle/deb/capitu-desktop_${VERSION}_amd64.deb.sig"
           if [ -f "$SIG_PATH" ]; then
             echo "Arquivo de assinatura encontrado: $SIG_PATH"
             SIG_CONTENT=$(cat "$SIG_PATH")
+            echo "Conteúdo da assinatura (primeiros 50 caracteres): ${SIG_CONTENT:0:50}..."
           else
-            echo "Arquivo de assinatura não encontrado. Listando arquivos disponíveis:"
-            find src-tauri/target/release/bundle -type f -name "*.sig" | xargs ls -la
-            exit 1
+            echo "Arquivo de assinatura não encontrado no caminho padrão: $SIG_PATH"
+            echo "Procurando por arquivos .sig alternativos:"
+            
+            # Procura por qualquer arquivo .sig e usa o primeiro encontrado
+            ALTERNATIVE_SIG_PATH=$(find src-tauri/target/release/bundle -name "*.sig" | head -n 1)
+            
+            if [ -n "$ALTERNATIVE_SIG_PATH" ]; then
+              echo "Arquivo de assinatura alternativo encontrado: $ALTERNATIVE_SIG_PATH"
+              SIG_CONTENT=$(cat "$ALTERNATIVE_SIG_PATH")
+              echo "Usando este arquivo como alternativa."
+            else
+              echo "ERRO: Nenhum arquivo de assinatura encontrado em qualquer lugar."
+              exit 1
+            fi
           fi
           
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/capitu-desktop_${VERSION}_amd64.deb"
+          echo "URL de Release configurada: $RELEASE_URL"
           
+          echo "Criando arquivo JSON de atualização..."
           echo '{
             "version": "'$VERSION'",
             "notes": "See the assets to download this version and install.",
@@ -104,18 +142,32 @@ jobs:
             }
           }' > capituai-latest.json
           
+          echo "Conteúdo do arquivo JSON criado:"
+          cat capituai-latest.json
+          
           # Verificar se o gh CLI está disponível
           if ! command -v gh &> /dev/null; then
             echo "GitHub CLI não encontrado, instalando..."
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt update
-            sudo apt install gh
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+              && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+              && sudo apt update \
+              && sudo apt install gh
+            
+            echo "GitHub CLI instalado: $(gh --version)"
+          else
+            echo "GitHub CLI já está instalado: $(gh --version)"
           fi
           
-          echo "Atualizando Gist com o arquivo de atualização..."
-          cat capituai-latest.json
+          echo "Verificando status de autenticação do GitHub CLI:"
+          gh auth status || echo "Não autenticado"
           
-          # Usar token GH_PAT diretamente com o comando gh auth
-          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+          echo "Tentando autenticar com o token GH_PAT..."
+          
+          echo "Verificando novamente o status de autenticação:"
+          gh auth status || echo "Falha na autenticação"
+          
+          echo "Atualizando Gist com o arquivo de atualização..."
           gh gist edit 440882f379e50d1ab465760193805cc9 capituai-latest.json
+          
+          echo "Status de saída do comando gh gist edit: $?"
+          echo "===== PROCESSO FINALIZADO ====="
