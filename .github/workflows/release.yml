@@ -75,6 +75,8 @@ jobs:
       # Etapa para criar o JSON e fazer upload para o Gist
       - name: Create updater JSON and upload to Gist
         if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           echo "===== INICIANDO PROCESSO DE ATUALIZAÇÃO DO GIST ====="
           
@@ -161,12 +163,8 @@ jobs:
           echo "Verificando status de autenticação do GitHub CLI:"
           gh auth status || echo "Não autenticado"
           
-          echo "Tentando autenticar com o token GH_PAT..."
-          
-          echo "Verificando novamente o status de autenticação:"
-          gh auth status || echo "Falha na autenticação"
-          
           echo "Atualizando Gist com o arquivo de atualização..."
+          echo "Usando GH_TOKEN configurado como variável de ambiente"
           gh gist edit 440882f379e50d1ab465760193805cc9 capituai-latest.json
           
           echo "Status de saída do comando gh gist edit: $?"
