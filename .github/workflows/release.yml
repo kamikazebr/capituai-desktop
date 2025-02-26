@@ -72,8 +72,8 @@ jobs:
           args: ${{ matrix.args }}
           includeUpdaterJson: true
       
-      # Etapa adicional para criar o JSON manualmente se a ação falhar
-      - name: Create updater JSON manually
+      # Etapa para criar o JSON e fazer upload para o Gist
+      - name: Create updater JSON and upload to Gist
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           VERSION=$(grep -Po '"version": "\K[^"]*' src-tauri/tauri.conf.json)
@@ -83,15 +83,15 @@ jobs:
           echo '{
             "version": "'$VERSION'",
             "notes": "See the assets to download this version and install.",
-            "pub_date": "'$(date --iso-8601=seconds)'",
+            "pub_date": "'$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")'",
             "platforms": {
               "linux-x86_64": {
                 "signature": "'$SIG_CONTENT'",
                 "url": "'$RELEASE_URL'"
               }
             }
-          }' > latest.json
+          }' > capituai-latest.json
           
-          gh release upload v$VERSION latest.json --clobber
+          GH_TOKEN=${{ secrets.GH_PAT }} gh gist edit 440882f379e50d1ab465760193805cc9 capituai-latest.json
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
