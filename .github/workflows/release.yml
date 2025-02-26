@@ -19,7 +19,7 @@ jobs:
         #   - platform: 'macos-latest' # for Intel based macs.
         #     args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
-            args: '-b=deb'
+            args: '-b=deb,updater'
         #   - platform: 'windows-latest'
         #     args: ''
 
@@ -36,7 +36,7 @@ jobs:
       - name: install pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: '9.15.3'  # Substitua X.Y.Z pela versão exata (ex: 8.6.12)
+          version: '9.15.3'
           run_install: false
 
       - name: setup node
@@ -46,9 +46,8 @@ jobs:
           cache: 'pnpm'
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
@@ -57,7 +56,6 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: install frontend dependencies
-        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
         run: pnpm install
 
       - uses: tauri-apps/tauri-action@v0
@@ -66,8 +64,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: 'App v__VERSION__'
+          tagName: v__VERSION__
+          releaseName: 'v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
