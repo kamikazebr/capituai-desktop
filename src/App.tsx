@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
-import "./styles/components.css";
-import { YoutubeInput } from "./components/YoutubeInput";
-import { UpdateChecker } from "./components/UpdateChecker";
-import { TranscriptionDisplay } from "./components/TranscriptionDisplay";
 import { ProcessProgress } from "./components/ProcessProgress";
+import { TranscriptionDisplay } from "./components/TranscriptionDisplay";
+import { UpdateChecker } from "./components/UpdateChecker";
+import { YoutubeInput } from "./components/YoutubeInput";
+import "./styles/components.css";
+
+import { getVersion } from "@tauri-apps/api/app";
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 function App() {
   const [audioPath, setAudioPath] = useState("");
@@ -18,6 +21,17 @@ function App() {
   
   // Novo estado para gerenciar erros de processamento
   const [processError, setProcessError] = useState<{ step: string; message: string } | null>(null);
+
+  useEffect(() => {
+    getVersion().then((version) => {
+      console.log("Version: ", version);
+      getCurrentWindow().setTitle(`CapituAI - ${version}`).then(() => {
+        console.log("Window title set");
+      }).catch((err) => {
+        console.error("Error setting window title: ", err);
+      });
+    });
+  }, []);
 
   const handleDownloadComplete = (path: string, transcript: string, time: string) => {
     setAudioPath(path);
@@ -44,6 +58,32 @@ function App() {
     // Não desativamos o loading state para manter o componente de progresso visível
     // mas atualizamos o passo para indicar que houve erro
     setCurrentStep(`${step}_error`);
+  };
+
+  // Função para lidar com a tentativa de repetir um processo que falhou
+  const handleRetry = (step: string) => {
+    // Limpar o estado de erro
+    setProcessError(null);
+    
+    // Reiniciar o passo atual sem o sufixo de erro
+    setCurrentStep(step);
+    setStepProgress(0);
+    
+    // Aqui você pode adicionar lógica específica para cada tipo de passo
+    // Por exemplo, se o erro foi no download, reinicie o processo de download
+    
+    // Este exemplo simples apenas volta para o estado de carregamento
+    // Você precisará implementar a lógica real para reiniciar o passo específico
+    if (step === "download") {
+      // Lógica para reiniciar o download
+      console.log("Reiniciando o download...");
+    } else if (step === "upload") {
+      // Lógica para reiniciar o upload
+      console.log("Reiniciando o upload...");
+    } else if (step === "transcription") {
+      // Lógica para reiniciar a transcrição
+      console.log("Reiniciando a transcrição...");
+    }
   };
 
   const copyToClipboard = () => {
@@ -75,6 +115,7 @@ function App() {
         progress={stepProgress}
         isVisible={loading || processError !== null}
         error={processError}
+        onRetry={handleRetry}
       />
       
       <TranscriptionDisplay 
@@ -84,6 +125,7 @@ function App() {
       
       <p style={{ textAlign: 'left' }}>{audioPath}</p>
       <p style={{ textAlign: 'left' }}>{timeLapse}</p>
+ 
     </main>
   );
 }

@@ -243,3 +243,32 @@
         border-left-color: #c62828;
     }
 }
+
+/* Adicione estes estilos ao seu arquivo CSS existente */
+
+.version-display {
+    font-size: 0.8rem;
+    color: #666;
+    display: inline-block;
+}
+
+.title-version {
+    font-size: 0.6rem;
+    vertical-align: super;
+    margin-left: 5px;
+}
+
+.app-footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eaeaea;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.footer-version {
+    font-weight: bold;
+}

@@ -3,9 +3,10 @@ type ProcessProgressProps = {
   progress: number;
   isVisible: boolean;
   error: { step: string; message: string } | null;
+  onRetry?: (step: string) => void;
 }
 
-export function ProcessProgress({ currentStep, isVisible, error }: ProcessProgressProps) {
+export function ProcessProgress({ currentStep, isVisible, error, onRetry }: ProcessProgressProps) {
   if (!isVisible) return null;
   
   const steps = [
@@ -22,6 +23,13 @@ export function ProcessProgress({ currentStep, isVisible, error }: ProcessProgre
   
   // Encontrar o índice do passo atual
   const currentIndex = steps.findIndex(step => step.id === realStep);
+  
+  // Função para lidar com o clique no botão de retry
+  const handleRetry = () => {
+    if (onRetry && realStep) {
+      onRetry(realStep);
+    }
+  };
   
   return (
     <div className="process-progress">
@@ -60,7 +68,7 @@ export function ProcessProgress({ currentStep, isVisible, error }: ProcessProgre
               )}
               {hasError && (
                 <div className="retry-container">
-                  <button className="retry-button">Tentar Novamente</button>
+                  <button className="retry-button" onClick={handleRetry}>Tentar Novamente</button>
                 </div>
               )}
             </div>

@@ -6,9 +6,12 @@ import { confirm } from '@tauri-apps/plugin-dialog';
 export function UpdateChecker() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
-
+  const [isOpen, setIsOpen] = useState(false);
   useEffect(() => {
-    checkForUpdates();
+    if (!isOpen) {
+      setIsOpen(_ => true);
+      checkForUpdates();
+    }
   }, []);
 
   async function checkForUpdates() {
