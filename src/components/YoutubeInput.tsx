@@ -1,5 +1,19 @@
-import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { message } from "@tauri-apps/plugin-dialog";
+import { useState } from "react";
+import { checkServices } from "./ServiceStatus";
+
+// Verificar os serviços antes de começar o processo
+const services = [
+  {
+    name: "Capitu AI",
+    url: "https://kamikazebr--capitu-ai-langchain-fastapi-app-dev.modal.run",
+  },
+  {
+    name: "Transcriber",
+    url: "https://kamikazebr--transcribe-youtube-fastapi-app.modal.run",
+  },
+];
 
 type YoutubeInputProps = {
   initialUrl: string;
@@ -17,12 +31,30 @@ export function YoutubeInput({
   onError
 }: YoutubeInputProps) {
   const [youtubeUrl, setYoutubeUrl] = useState(initialUrl);
+  const [_setLoading, setLoading] = useState(false);
   
-  async function downloadUploadGenerateChapters() {
-    onLoadingChange(true);
-    const startTime = Date.now();
-    
+  const handleGenerateClick = async () => {
     try {
+      
+      
+      const serviceStatus = await checkServices(services);
+      const offlineServices = serviceStatus.filter(s => s.status === "offline");
+      
+      if (offlineServices.length > 0) {
+        // Notificar o usuário que alguns serviços estão offline
+        const serviceNames = offlineServices.map(s => s.name).join(", ");
+        await message(
+          `Os seguintes serviços estão offline: ${serviceNames}. Não é possível gerar capítulos no momento.`,
+          { title: "Serviços Indisponíveis", kind: "error" }
+        );
+        return;
+      }
+      
+      // Se todos os serviços estiverem online, continue com o processo normal
+      setLoading(true);
+      onLoadingChange(true);
+      const startTime = Date.now();
+      
       // Etapa 1: Download do áudio
       onProgressUpdate("download", 0);
       console.log("Downloading audio from YouTube");
@@ -89,8 +121,11 @@ export function YoutubeInput({
       const errorMessage = "Erro inesperado: " + error;
       console.error(errorMessage);
       onError("unknown", errorMessage);
+    } finally {
+      setLoading(false);
+      onLoadingChange(false);
     }
-  }
+  };
 
   return (
     <div className="youtube-input-container">
@@ -102,7 +137,7 @@ export function YoutubeInput({
         className="youtube-url-input"
       />
       <button 
-        onClick={() => downloadUploadGenerateChapters()}
+        onClick={() => handleGenerateClick()}
         className="generate-button"
       >
         Gerar Capítulos

@@ -2,16 +2,26 @@
 use serde_json::Value;
 use std::path::Path;
 use std::time::Duration;
-use tauri::command;
+use tauri::{command, Emitter, Manager, Window};
+use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_oauth::start;
 use tokio::time::sleep;
 use youtube_dl::YoutubeDl;
-
 const OUTPUT_FOLDER: &str = "../output";
 const CAPITU_LANGCHAIN_URL: &str =
     "https://kamikazebr--capitu-ai-langchain-fastapi-app-dev.modal.run";
 
 const TRANSCRIBE_YOUTUBE_URL: &str = "https://kamikazebr--transcribe-youtube-fastapi-app.modal.run";
 
+#[command]
+async fn start_server(window: Window) -> Result<u16, String> {
+    start(move |url| {
+        // Because of the unprotected localhost port, you must verify the URL here.
+        // Preferebly send back only the token, or nothing at all if you can handle everything else in Rust.
+        let _ = window.emit("redirect_uri", url);
+    })
+    .map_err(|err| err.to_string())
+}
 #[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -187,17 +197,52 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, cmd| {
+            println!("Received args: {:?}", args);
+            println!("Received cmd: {:?}", cmd);
+
+            if args.len() > 1 {
+                let deep_link = args[1].clone();
+                println!("Deep link: {:?}", deep_link);
+
+                if deep_link.starts_with("capituai://") {
+                    let url = deep_link.clone();
+                    println!("URL: {:?}", url);
+
+                    // Emitir o evento deep_link_received para o frontend
+                    if let Some(window) = app.get_webview_window("main") {
+                        window
+                            .emit("deep_link_received", url)
+                            .expect("falha ao emitir evento deep_link_received");
+                    }
+                }
+            }
+
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_oauth::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             take_transcript,
             download_audio,
             upload_audio,
-            take_transcription
+            take_transcription,
+            start_server
         ])
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.deep_link().register("capituai")?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

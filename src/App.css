@@ -5,6 +5,7 @@
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafb);
 }
+
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -28,6 +29,11 @@
   flex-direction: column;
   justify-content: center;
   text-align: center;
+  max-width: 100vw;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 .logo {
@@ -81,6 +87,7 @@ button {
 button:hover {
   border-color: #396cd8;
 }
+
 button:active {
   border-color: #396cd8;
   background-color: #e8e8e8;
@@ -110,7 +117,157 @@ button {
     color: #ffffff;
     background-color: #0f0f0f98;
   }
+
   button:active {
     background-color: #0f0f0f69;
+  }
+}
+
+/* Estilos para o menu lateral */
+.sidebar-menu {
+  position: fixed;
+  top: 0;
+  left: -300px;
+  width: 280px;
+  height: 100%;
+  background-color: #242424;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+  transition: left 0.3s ease;
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.sidebar-menu.open {
+  left: 0;
+}
+
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.menu-header h2 {
+  margin: 0;
+  color: #fff;
+}
+
+.close-menu-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.menu-content {
+  padding: 20px;
+}
+
+.menu-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-content li {
+  margin-bottom: 15px;
+}
+
+.menu-content a {
+  color: #fff;
+  text-decoration: none;
+  font-size: 16px;
+  display: block;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.menu-content a:hover {
+  background-color: #333;
+}
+
+.menu-toggle-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px 10px;
+  margin-right: 5px;
+  min-width: 40px;
+}
+
+.menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+/* Estilos para o botão de logout */
+.logout-btn {
+  background-color: #ff4757;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-left: 10px;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.logout-btn:hover {
+  background-color: #ff6b81;
+}
+
+/* Ajustar o cabeçalho para acomodar o botão de menu e o botão de logout */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 15px;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.app-header h1 {
+  margin: 0;
+  flex-grow: 1;
+  text-align: center;
+  font-size: clamp(1rem, 5vw, 1.5rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 600px) {
+  .app-header {
+    padding: 10px 5px;
+  }
+
+  .logout-btn {
+    padding: 5px 8px;
+    font-size: 0.8rem;
+  }
+
+  .menu-toggle-btn {
+    font-size: 18px;
+    padding: 5px 8px;
   }
 }
