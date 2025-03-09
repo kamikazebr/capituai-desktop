@@ -238,7 +238,7 @@ pub fn run() {
                 // window.close_devtools();
             }
 
-            #[cfg(desktop)]
+            #[cfg(any(target_os = "linux", target_os = "windows", windows))]
             let result = app.deep_link().register("capituai");
             if let Err(e) = result {
                 println!("Error: {:?}", e);
