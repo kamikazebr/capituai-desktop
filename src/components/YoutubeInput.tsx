@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { message } from "@tauri-apps/plugin-dialog";
+import { confirm, message } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { checkServices } from "./ServiceStatus";
 
@@ -18,18 +18,51 @@ const services = [
 
 const TRANSCRIBER_URL = services.find(s => s.name === "Transcriber")?.url || "";
 // Extraindo a URL da API do Transcriber para uso em outras funções
-const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
+// const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
 
 type YoutubeInputProps = {
   initialUrl: string;
-  onDownloadComplete: (audioPath: string, transcript: string, timeTaken: string) => void;
+  onDownloadComplete: (audioPath: string, chapters: ChapterResponse[], timeTaken: string) => void;
   onLoadingChange: (isLoading: boolean) => void;
   onProgressUpdate: (step: string, progress: number) => void;
   onError: (step: string, error: any) => void;
 }
 
+interface ChapterResponse {
+  timecode: string;
+  title: string;
+}
+
 // Função para esperar um determinado tempo (em milissegundos)
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Constantes para configuração de polling e delays
+const POLLING_CONFIG = {
+  INITIAL_DELAY: 3000, // 3 segundos
+  BACKOFF_MULTIPLIER: 1.5,
+  MAX_ATTEMPTS: {
+    CHAPTERS: 10,
+    TRANSCRIPTION: 10,
+    TASK_STATUS: 60
+  },
+  TASK_STATUS_INTERVAL: 5000, // 5 segundos
+  MAX_PROCESSING_TIME: 60 * 60 * 1000 // 1 hora em milissegundos
+} as const;
+
+const PROGRESS_STEPS = {
+  DOWNLOAD: "download",
+  UPLOAD: "upload",
+  CHAPTERS: "chapters",
+  PROCESSING: "processando",
+  TRANSCRIPTION: "transcription",
+  COMPLETE: "complete"
+} as const;
+
+const PROCESSING_STATUS = {
+  COMPLETED: "completed",
+  BACKGROUND: "background_processing",
+  ERROR: "error"
+} as const;
 
 export function YoutubeInput({ 
   initialUrl, 
@@ -42,117 +75,109 @@ export function YoutubeInput({
   const [isLoading, setIsLoading] = useState(false);
   
   // Função para tentar obter a transcrição com exponential backoff
-  const pollForTranscription = async (filenameId: string, maxAttempts: number = 10): Promise<string> => {
-    let attempt = 1;
-    let delay = 3000; // Começa com 3 segundos
+  // const pollForTranscription = async (filenameId: string, maxAttempts: number = POLLING_CONFIG.MAX_ATTEMPTS.TRANSCRIPTION): Promise<string> => {
+  //   let attempt = 1;
+  //   let delay = POLLING_CONFIG.INITIAL_DELAY;
     
-    while (attempt <= maxAttempts) {
-      try {
-        console.log(`Tentativa ${attempt}/${maxAttempts} de obter a transcrição (aguardando ${delay/1000}s)`);
-        onProgressUpdate("transcription", (attempt / maxAttempts) * 90); // Máximo 90% durante poll
+  //   while (attempt <= maxAttempts) {
+  //     try {
+  //       console.log(`Tentativa ${attempt}/${maxAttempts} de obter a transcrição (aguardando ${delay/1000}s)`);
+  //       onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, (attempt / maxAttempts) * 90);
         
-        const transcriptionRes = await invoke<string>("take_transcription", { filenameId });
+  //       const transcriptionRes = await invoke<string>("take_transcription", { filenameId });
         
-        // Se chegou aqui, a transcrição foi obtida com sucesso
-        console.log("Transcrição obtida com sucesso na tentativa", attempt);
-        return transcriptionRes;
-      } catch (error: any) {
-        console.log(`Erro na tentativa ${attempt}:`, error);
+  //       console.log("Transcrição obtida com sucesso na tentativa", attempt);
+  //       return transcriptionRes;
+  //     } catch (error: any) {
+  //       console.log(`Erro na tentativa ${attempt}:`, error);
         
-        // Verifica se o erro é porque a transcrição ainda está em processamento
-        if (error.toString().includes("Transcription not found") || 
-            error.toString().includes("not found") || 
-            error.toString().includes("still processing")) {
+  //       if (error.toString().includes("Transcription not found") || 
+  //           error.toString().includes("not found") || 
+  //           error.toString().includes("still processing")) {
           
-          if (attempt < maxAttempts) {
-            // Aguarda antes da próxima tentativa com backoff exponencial
-            await sleep(delay);
-            delay = Math.min(delay * 1.5, 30000); // Aumenta o delay, mas no máximo 30s
-            attempt++;
-          } else {
-            throw new Error(`Transcrição não encontrada após ${maxAttempts} tentativas`);
-          }
-        } else {
-          // Se for outro tipo de erro, propaga imediatamente
-          throw error;
-        }
-      }
-    }
+  //         if (attempt < maxAttempts) {
+  //           await sleep(delay);
+  //           delay *= POLLING_CONFIG.BACKOFF_MULTIPLIER;
+  //           attempt++;
+  //         } else {
+  //           throw new Error(`Transcrição não encontrada após ${maxAttempts} tentativas`);
+  //         }
+  //       } else {
+  //         throw error;
+  //       }
+  //     }
+  //   }
     
-    throw new Error(`Número máximo de tentativas (${maxAttempts}) excedido`);
-  };
+  //   throw new Error(`Número máximo de tentativas (${maxAttempts}) excedido`);
+  // };
   
-  // Função para verificar o status da tarefa via API
-  const checkTaskStatus = async (taskId: string) => {
-    try {
-      const response = await fetch(`${API_URL}/task-status/${taskId}`);
-      const data = await response.json();
+  // // Função para verificar o status da tarefa via API
+  // const checkTaskStatus = async (taskId: string) => {
+  //   try {
+  //     const response = await fetch(`${API_URL}/task-status/${taskId}`);
+  //     const data = await response.json();
       
-      console.log("Status da tarefa:", data);
+  //     console.log("Status da tarefa:", data);
       
-      // Verificar se a tarefa falhou
-      if (data.task_result && data.task_result.result) {
-        const resultStatus = data.task_result.result;
+  //     // Verificar se a tarefa falhou
+  //     if (data.task_result && data.task_result.result) {
+  //       const resultStatus = data.task_result.result;
         
-        if (resultStatus === "failure") {
-          onError("processamento", "O processamento do vídeo falhou no servidor.");
-          return false;
-        } else if (resultStatus === "terminated") {
-          onError("processamento", "O processamento foi terminado antes da conclusão.");
-          return false;
-        } else if (resultStatus === "timeout") {
-          onError("processamento", "O processamento do vídeo excedeu o tempo limite.");
-          return false;
-        } else if (resultStatus === "init_failure") {
-          onError("inicialização", "Falha na inicialização do processo.");
-          return false;
-        } else if (resultStatus === "expired") {
-          onError("processamento", "O resultado do processamento expirou.");
-          return false;
-        } else if (resultStatus === "error") {
-          onError("processamento", data.task_result.error || "Erro desconhecido no servidor.");
-          return false;
-        } else if (resultStatus === "success") {
-          return true;
-        }
-      }
+  //       if (resultStatus === "failure") {
+  //         onError("processamento", "O processamento do vídeo falhou no servidor.");
+  //         return false;
+  //       } else if (resultStatus === "terminated") {
+  //         onError("processamento", "O processamento foi terminado antes da conclusão.");
+  //         return false;
+  //       } else if (resultStatus === "timeout") {
+  //         onError("processamento", "O processamento do vídeo excedeu o tempo limite.");
+  //         return false;
+  //       } else if (resultStatus === "init_failure") {
+  //         onError("inicialização", "Falha na inicialização do processo.");
+  //         return false;
+  //       } else if (resultStatus === "expired") {
+  //         onError("processamento", "O resultado do processamento expirou.");
+  //         return false;
+  //       } else if (resultStatus === "error") {
+  //         onError("processamento", data.task_result.error || "Erro desconhecido no servidor.");
+  //         return false;
+  //       } else if (resultStatus === "success") {
+  //         return true;
+  //       }
+  //     }
       
-      // Se ainda estiver em andamento
-      return null;
-    } catch (error) {
-      console.error("Erro ao verificar status da tarefa:", error);
-      onError("verificação", `Erro ao verificar status: ${error}`);
-      return false;
-    }
-  };
+  //     // Se ainda estiver em andamento
+  //     return null;
+  //   } catch (error) {
+  //     console.error("Erro ao verificar status da tarefa:", error);
+  //     onError("verificação", `Erro ao verificar status: ${error}`);
+  //     return false;
+  //   }
+  // };
 
-  // Função para polling do status da tarefa
-  const pollTaskStatus = async (taskId: string) => {
-    let attempts = 0;
-    const maxAttempts = 60; // 5 minutos com intervalo de 5s
+  // // Função para polling do status da tarefa
+  // const pollTaskStatus = async (taskId: string) => {
+  //   let attempts = 0;
+  //   const maxAttempts = POLLING_CONFIG.MAX_ATTEMPTS.TASK_STATUS;
     
-    while (attempts < maxAttempts) {
-      const status = await checkTaskStatus(taskId);
+  //   while (attempts < maxAttempts) {
+  //     const status = await checkTaskStatus(taskId);
       
-      // Se tiver um resultado definitivo (true = sucesso, false = falha)
-      if (status === true) {
-        return true;
-      } else if (status === false) {
-        return false;
-      }
+  //     if (status === true) {
+  //       return true;
+  //     } else if (status === false) {
+  //       return false;
+  //     }
       
-      // Senão, ainda está processando
-      onProgressUpdate("processando", Math.min(90, attempts * 2));
+  //     onProgressUpdate(PROGRESS_STEPS.PROCESSING, Math.min(90, attempts * 2));
       
-      // Esperar 5 segundos antes da próxima verificação
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      attempts++;
-    }
+  //     await sleep(POLLING_CONFIG.TASK_STATUS_INTERVAL);
+  //     attempts++;
+  //   }
     
-    // Se atingir o número máximo de tentativas
-    onError("timeout", "O tempo máximo de espera foi atingido.");
-    return false;
-  };
+  //   onError("timeout", "O tempo máximo de espera foi atingido.");
+  //   return false;
+  // };
 
   // Verifica serviços online
   const checkOnlineServices = async () => {
@@ -171,9 +196,9 @@ export function YoutubeInput({
   };
 
   // Verifica cache do arquivo
-  const checkFileCache = async (filename: string) => {
-    console.log("Verificando se arquivo já existe:", filename);
-    const checkResponse = await fetch(`${TRANSCRIBER_URL}/check-cache/${filename}`);
+  const checkFileCache = async (filename_id: string) => {
+    console.log("Verificando se arquivo já existe:", filename_id);
+    const checkResponse = await fetch(`${TRANSCRIBER_URL}/check-cache/${filename_id}`);
     return await checkResponse.json();
   };
 
@@ -196,37 +221,148 @@ export function YoutubeInput({
     return JSON.parse(uploadRes);
   };
 
-  // Obtém a transcrição
-  const getTranscription = async (filenameId: string, checkResult: any, uploadResultJson: any) => {
-    onProgressUpdate("transcription", 0);
+  // Função para tentar obter os capítulos com exponential backoff
+  const pollForChapters = async (filenameId: string, maxAttempts: number = POLLING_CONFIG.MAX_ATTEMPTS.CHAPTERS): Promise<any> => {
+    let attempt = 1;
+    let delay = POLLING_CONFIG.INITIAL_DELAY;
     
-    if (checkResult.status && checkResult.status.has_transcript) {
-      console.log("Transcrição já existe, pegando do cache");
-      const transcriptResponse = await fetch(`${TRANSCRIBER_URL}/transcript/${filenameId}`);
-      const transcriptionRes = await transcriptResponse.text();
-      onProgressUpdate("transcription", 100);
-      return transcriptionRes;
-    }
-
-    const taskId = uploadResultJson["task_id"];
-    if (taskId) {
-      console.log("Task ID disponível, usando verificação de status:", taskId);
-      const success = await pollTaskStatus(taskId);
-      if (!success) {
-        throw new Error("A verificação de status da tarefa falhou");
+    while (attempt <= maxAttempts) {
+      try {
+        console.log(`Tentativa ${attempt}/${maxAttempts} de obter os capítulos (aguardando ${delay/1000}s)`);
+        onProgressUpdate(PROGRESS_STEPS.CHAPTERS, (attempt / maxAttempts) * 90);
+        
+        const chaptersResponse = await fetch(`${TRANSCRIBER_URL}/chapters/${filenameId}`);
+        const chaptersData = await chaptersResponse.json();
+        
+        if (chaptersData.status === "completed" && chaptersData.chapters) {
+          console.log("Capítulos obtidos com sucesso na tentativa", attempt);
+          return {
+            status: PROCESSING_STATUS.COMPLETED,
+            chapters: chaptersData.chapters
+          };
+        }
+        
+        if (attempt < maxAttempts) {
+          await sleep(delay);
+          delay *= POLLING_CONFIG.BACKOFF_MULTIPLIER;
+          attempt++;
+        } else {
+          console.log("Máximo de tentativas excedido, processamento continuará em background");
+          return {
+            status: PROCESSING_STATUS.BACKGROUND,
+            message: "O processamento dos capítulos está demorando mais que o normal. Você será notificado quando estiver pronto."
+          };
+        }
+      } catch (error: any) {
+        console.log(`Erro na tentativa ${attempt}:`, error);
+        
+        if (attempt < maxAttempts) {
+          await sleep(delay);
+          delay *= POLLING_CONFIG.BACKOFF_MULTIPLIER;
+          attempt++;
+        } else {
+          console.log("Máximo de tentativas excedido após erros, processamento continuará em background");
+          return {
+            status: PROCESSING_STATUS.BACKGROUND,
+            message: "O processamento dos capítulos está demorando mais que o normal. Você será notificado quando estiver pronto."
+          };
+        }
       }
-      console.log("Task ID disponível, pegando transcrição");
-      return await invoke<string>("take_transcription", { filenameId });
+    }
+    
+    return {
+      status: PROCESSING_STATUS.BACKGROUND,
+      message: "O processamento dos capítulos está demorando mais que o normal. Você será notificado quando estiver pronto."
+    };
+  };
+
+  // Verifica se os capítulos precisam ser reprocessados baseado no tempo
+  const shouldReprocessChapters = (checkResult: any): boolean => {
+    if (!checkResult.status?.has_chapters || !checkResult.metadata?.created_at) {
+      return true;
     }
 
-    console.log("Task ID não disponível, usando polling direto");
-    return await pollForTranscription(filenameId);
+    const createdAt = new Date(checkResult.metadata.created_at).getTime();
+    const now = Date.now();
+    const processingTime = now - createdAt;
+    
+    return processingTime > POLLING_CONFIG.MAX_PROCESSING_TIME;
+  };
+
+  // Obtém os capítulos
+  const getChapters = async (filenameId: string, checkResult: any ) => {
+    onProgressUpdate(PROGRESS_STEPS.CHAPTERS, 0);
+    
+    try {
+      // Verifica se precisa reprocessar os capítulos
+      const needsReprocessing = shouldReprocessChapters(checkResult);
+      
+      if (!needsReprocessing && checkResult.status?.has_chapters) {
+        console.log("Capítulos encontrados no cache e ainda válidos");
+        const chaptersResponse = await fetch(`${TRANSCRIBER_URL}/chapters/${filenameId}`);
+        const chaptersData = await chaptersResponse.json();
+        
+        if (chaptersData.status === "completed" && chaptersData.chapters) {
+          console.log("Usando capítulos do cache");
+          onProgressUpdate(PROGRESS_STEPS.CHAPTERS, 100);
+          return {
+            status: PROCESSING_STATUS.COMPLETED,
+            chapters: chaptersData.chapters
+          };
+        }
+      }
+
+      if (needsReprocessing) {
+        console.log("Iniciando novo processamento via take_transcription");
+        const confirmResult = await confirm("Iniciando geração de novos capítulos...", { title: "Processamento de Capítulos", kind: "info" });
+        if (!confirmResult) {
+          return {
+            status: PROCESSING_STATUS.BACKGROUND,
+            message: "Processamento cancelado pelo usuário."
+          };
+        }
+        
+        try {
+          await invoke<string>("take_transcription", { filenameId });
+          
+          // Após o processamento, fazemos polling para obter os capítulos
+          console.log("Processamento completo, aguardando geração dos capítulos");
+          return await pollForChapters(filenameId);
+        } catch (transcriptionError: unknown) {
+          console.error("Erro no take_transcription:", transcriptionError);
+          
+          // Verifica se é um erro de quota ou rate limit
+          const errorMessage = transcriptionError instanceof Error ? transcriptionError.message : String(transcriptionError);
+          
+          if (errorMessage.includes("402")) {
+            await message(
+              "O limite de uso da OpenAI foi excedido. Por favor, tente novamente mais tarde ou entre em contato com o suporte.",
+              { title: "Limite Excedido", kind: "error" }
+            );
+          } else if (errorMessage.includes("429")) {
+            await message(
+              "Muitas requisições simultâneas. Por favor, aguarde um momento e tente novamente.",
+              { title: "Muitas Requisições", kind: "warning" }
+            );
+          }
+          
+          throw transcriptionError;
+        }
+      }
+      
+      // Se chegou aqui sem reprocessamento, tenta polling normal
+      console.log("Tentando obter capítulos via polling");
+      return await pollForChapters(filenameId);
+      
+    } catch (error) {
+      console.error("Erro ao obter capítulos:", error);
+      throw new Error(`Erro ao obter capítulos: ${error}`);
+    }
   };
 
   // Processa o resultado final
-  const processResult = (result: string, transcriptionRes: string, startTime: number, isFromCache: boolean) => {
-    const cleanTranscription = JSON.parse(transcriptionRes);
-    console.log("cleanTrans", cleanTranscription);
+  const processResult = (result: string, chaptersResult: any, startTime: number, isFromCache: boolean) => {
+    console.log("Resultado dos capítulos:", chaptersResult);
     
     const endTime = Date.now();
     const timeTaken = endTime - startTime;
@@ -234,8 +370,17 @@ export function YoutubeInput({
     const minutes = Math.floor((timeTaken / 1000) / 60);
     const timeResult = `Tempo do processo: ${minutes} minutos e ${seconds} segundos${isFromCache ? ' (cache)' : ''}`;
     
-    onDownloadComplete(result, cleanTranscription.text, timeResult);
-    onProgressUpdate("complete", 100);
+    if (chaptersResult.status === PROCESSING_STATUS.BACKGROUND) {
+      // Se está em processamento background, mostra mensagem amigável
+      message(chaptersResult.message, { title: "Processamento em Andamento", kind: "info" });
+      onDownloadComplete(result, [], timeResult);
+    } else {
+      // Se completou com sucesso, processa normalmente
+      console.log("chaptersResult.chapters", chaptersResult.chapters.chapters);
+      onDownloadComplete(result, chaptersResult.chapters.chapters, timeResult);
+    }
+    
+    onProgressUpdate(PROGRESS_STEPS.COMPLETE, 100);
   };
 
   const handleGenerateClick = async () => {
@@ -245,7 +390,6 @@ export function YoutubeInput({
       setIsLoading(true);
       onLoadingChange(true);
       
-      // Verifica serviços
       if (!await checkOnlineServices()) {
         setIsLoading(false);
         onLoadingChange(false);
@@ -254,36 +398,32 @@ export function YoutubeInput({
       
       const startTime = Date.now();
       
-      // Download do áudio, internamente já verifica se o arquivo existe no cache
-      onProgressUpdate("download", 0);
+      onProgressUpdate(PROGRESS_STEPS.DOWNLOAD, 0);
       console.log("Downloading audio from YouTube");
       const result = await invoke<string>("download_audio", { url: youtubeUrl });
-      onProgressUpdate("download", 100);
+      onProgressUpdate(PROGRESS_STEPS.DOWNLOAD, 100);
       
-      // Verifica cache
       const filename = result.split("/").pop();
+      console.log("filename", filename);
       if (!filename) throw new Error("Nome do arquivo inválido");
       
       const checkResult = await checkFileCache(filename);
       console.log("checkResult", checkResult);
       
-      // Upload ou usa cache
       const uploadResultJson = await processFileUpload(result, checkResult);
       const filenameId = uploadResultJson["filename_id"];
       
-      // Obtem transcrição
-      const transcriptionRes = await getTranscription(filenameId, checkResult, uploadResultJson);
-      console.log("Transcription result:", transcriptionRes);
+      const chaptersResult = await getChapters(filenameId, checkResult);
+      console.log("Chapters result:", chaptersResult);
       
-      // Processa resultado
-      processResult(result, transcriptionRes, startTime, checkResult.status?.has_transcript || false);
+      processResult(result, chaptersResult, startTime, checkResult.status?.has_transcript || false);
       
     } catch (error: unknown) {
       console.error("Erro:", error);
       const step = (error instanceof Error) ? 
-        (error.message.includes("download") ? "download" :
-         error.message.includes("upload") ? "upload" :
-         error.message.includes("transcrição") ? "transcription" : "unknown")
+        (error.message.includes("download") ? PROGRESS_STEPS.DOWNLOAD :
+         error.message.includes("upload") ? PROGRESS_STEPS.UPLOAD :
+         error.message.includes("capítulos") ? PROGRESS_STEPS.CHAPTERS : "unknown")
         : "unknown";
       onError(step, `Erro: ${error}`);
     } finally {

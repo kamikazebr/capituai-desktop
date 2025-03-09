@@ -203,12 +203,45 @@
 
 /* Estilos para erros no ProcessProgress */
 .error-message {
-    background-color: #ffebee;
-    color: #c62828;
-    padding: 10px;
-    margin-bottom: 15px;
+    margin: 1rem 0;
+    padding: 1rem;
+    border-radius: 8px;
+    background-color: #fff1f0;
+    border: 1px solid #ffccc7;
+    color: #cf1322;
+}
+
+.error-message.quota-exceeded {
+    background-color: #fff7e6;
+    border-color: #ffd591;
+    color: #d46b08;
+    text-align: center;
+}
+
+.error-message.quota-exceeded h4 {
+    color: #d46b08;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.error-message.quota-exceeded p {
+    margin: 0.5rem 0;
+    color: #873800;
+}
+
+.error-message.quota-exceeded a {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: #d46b08;
+    color: white;
+    text-decoration: none;
     border-radius: 4px;
-    border-left: 4px solid #c62828;
+    transition: background-color 0.2s;
+}
+
+.error-message.quota-exceeded a:hover {
+    background-color: #873800;
 }
 
 .step.error .step-indicator {

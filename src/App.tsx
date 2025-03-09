@@ -37,6 +37,11 @@ function processDeepLink(url: string) {
   }
 }
 
+interface ChapterResponse {
+  timecode: string;
+  title: string;
+}
+
 function App() {
   const [audioPath, setAudioPath] = useState("");
   const [transcriptionResult, setTranscriptionResult] = useState("");
@@ -48,7 +53,7 @@ function App() {
   const [stepProgress, setStepProgress] = useState(0);
   
   // Novo estado para gerenciar erros de processamento
-  const [processError, setProcessError] = useState<{ step: string; message: string } | null>(null);
+  const [processError, setProcessError] = useState<{ step: string; message: string; type?: string } | null>(null);
   
   // Novo estado para gerenciar a autenticação do usuário
   const [userSession, setUserSession] = useState<any>(null);
@@ -113,12 +118,16 @@ function App() {
     });
   }, []);
 
-  const handleDownloadComplete = (path: string, transcript: string, time: string) => {
+  const handleDownloadComplete = (path: string, chapters: ChapterResponse[], time: string) => {
     setAudioPath(path);
-    setTranscriptionResult(transcript);
+    setTranscriptionResult(_chapter_to_string(chapters));
     setTimeLapse(time);
     // Quando conclui com sucesso, limpa qualquer erro anterior
     setProcessError(null);
+  };
+
+  const _chapter_to_string = (chapters: ChapterResponse[]): string => {
+    return chapters.map(chapter => `${chapter.timecode} - ${chapter.title}`).join("\n");
   };
 
   const handleProgressUpdate = (step: string, progress: number) => {
@@ -129,10 +138,20 @@ function App() {
   const handleProcessError = (step: string, error: any) => {
     console.error(`Erro durante ${step}:`, error);
     
+    let errorMessage = error.toString();
+    let errorType = 'generic';
+    
+    // Verifica se é um erro de quota excedida
+    if (errorMessage.includes('QUOTA_EXCEEDED')) {
+      errorType = 'quota_exceeded';
+      errorMessage = 'Sua quota da OpenAI foi excedida. Por favor, verifique seu plano e detalhes de faturamento.';
+    }
+    
     // Armazenar informações do erro para exibir na UI
     setProcessError({
       step,
-      message: error.toString()
+      message: errorMessage,
+      type: errorType
     });
     
     // Não desativamos o loading state para manter o componente de progresso visível

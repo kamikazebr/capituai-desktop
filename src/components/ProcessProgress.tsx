@@ -2,7 +2,7 @@ type ProcessProgressProps = {
   currentStep: string;
   progress: number;
   isVisible: boolean;
-  error: { step: string; message: string } | null;
+  error: { step: string; message: string; type?: string } | null;
   onRetry?: (step: string) => void;
 }
 
@@ -30,14 +30,31 @@ export function ProcessProgress({ currentStep, isVisible, error, onRetry }: Proc
       onRetry(realStep);
     }
   };
+
+  // Função para formatar a mensagem de erro
+  const getErrorMessage = (error: { message: string; type?: string }) => {
+    if (error.type === 'quota_exceeded') {
+      return (
+        <div className="error-message quota-exceeded">
+          <h4>Limite de Créditos Excedido</h4>
+          <p>Infelizmente você atingiu o limite de créditos da OpenAI.</p>
+          <p>Por favor, verifique seu plano e detalhes de faturamento para continuar usando o serviço.</p>
+          <a href="https://platform.openai.com/account/billing" target="_blank" rel="noopener noreferrer">
+            Verificar Plano OpenAI
+          </a>
+        </div>
+      );
+    }
+    return <p>Ocorreu um erro durante o processamento: {error.message}</p>;
+  };
   
   return (
     <div className="process-progress">
       <h3>Progresso</h3>
       
       {error && (
-        <div className="error-message">
-          <p>Ocorreu um erro durante o processamento: {error.message}</p>
+        <div className={`error-message ${error.type ? `error-${error.type}` : ''}`}>
+          {getErrorMessage(error)}
         </div>
       )}
       

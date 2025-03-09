@@ -123,12 +123,16 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
     // Extract the transcript or handle errors
     if let Some(transcript) = json.get("transcript") {
         println!("Transcrição: {}", transcript);
+        let json_body_new =
+            serde_json::json!({"filename_id":filename_id,"transcript":transcript.to_string()});
+
+        println!("JSON Body New: {}", json_body_new.clone());
 
         // Chamada para generate-chapters
         let new_url_chapters = format!("{}/generate-chapters", CAPITU_LANGCHAIN_URL);
         let response = client
             .post(&new_url_chapters)
-            .body(transcript.to_string())
+            .json(&json_body_new)
             .send()
             .await
             .map_err(|e| format!("Failed to generate chapters: {}", e))?;
@@ -167,6 +171,8 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
                         println!("Result is pending, waiting...");
                         sleep(Duration::from_secs(5)).await; // Espera 5 segundos antes de tentar novamente
                         continue;
+                    } else if status == "timeout_get" {
+                        println!("Result is timeout_get, waiting...");
                     } else {
                         let text = task_result.get("text").unwrap();
                         println!("Text: {:?}", text.as_str().unwrap());
@@ -225,8 +231,18 @@ pub fn run() {
             start_server
         ])
         .setup(|app| {
+            #[cfg(debug_assertions)] // only include this code on debug builds
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+                // window.close_devtools();
+            }
+
             #[cfg(desktop)]
-            app.deep_link().register("capituai")?;
+            let result = app.deep_link().register("capituai");
+            if let Err(e) = result {
+                println!("Error: {:?}", e);
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
