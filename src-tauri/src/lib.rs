@@ -22,18 +22,6 @@ async fn start_server(window: Window) -> Result<u16, String> {
     })
     .map_err(|err| err.to_string())
 }
-#[command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[command]
-fn take_transcript(filename_id: &str) -> String {
-    format!(
-        "Take take , {}! You've been greeted from Rust!",
-        filename_id
-    )
-}
 
 #[command]
 async fn download_audio(url: &str) -> Result<String, String> {
@@ -231,8 +219,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_oauth::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
-            take_transcript,
             download_audio,
             upload_audio,
             take_transcription,

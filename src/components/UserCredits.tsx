@@ -23,18 +23,7 @@ const UserCredits = ({ userId }: UserCreditsProps) => {
       try {
         setIsLoading(true);
         
-        // Primeiro verificar se existe uma sessão
-        const { data: sessionData } = await supabase.auth.getSession();
-        
-        if (!sessionData?.session) {
-          console.error("Usuário não está logado");
-          // Redirecionar para página de login ou mostrar mensagem
-          return;
-        }
-        
-        // Se chegou aqui, o usuário está logado
-        const userId = sessionData.session.user.id;
-        
+
         // Buscar os créditos do usuário
         const { data, error } = await supabase
           .from('credits')

@@ -217,6 +217,22 @@ function App() {
     setMenuOpen(!menuOpen);
   };
 
+  // Modificar a função handleLoadingChange para limpar estados quando começar um novo processo
+  const handleLoadingChange = (isLoading: boolean) => {
+    setLoading(isLoading);
+    
+    // Se estiver começando um novo processo (isLoading = true),
+    // limpar estados anteriores
+    if (isLoading) {
+      setTranscriptionResult("");
+      setAudioPath("");
+      setTimeLapse("");
+      setProcessError(null);
+      setCurrentStep("");
+      setStepProgress(0);
+    }
+  };
+
   return (
     <main className="container">
       {/* Menu lateral */}
@@ -273,7 +289,7 @@ function App() {
           <YoutubeInput 
             initialUrl="https://www.youtube.com/watch?v=d3djdjLhH_g"
             onDownloadComplete={handleDownloadComplete}
-            onLoadingChange={setLoading}
+            onLoadingChange={handleLoadingChange}
             onProgressUpdate={handleProgressUpdate}
             onError={handleProcessError}
           />
