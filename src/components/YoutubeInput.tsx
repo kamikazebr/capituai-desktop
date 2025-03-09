@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { confirm, message } from "@tauri-apps/plugin-dialog";
+import { message } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { checkServices } from "./ServiceStatus";
 
@@ -18,7 +18,7 @@ const services = [
 
 const TRANSCRIBER_URL = services.find(s => s.name === "Transcriber")?.url || "";
 // Extraindo a URL da API do Transcriber para uso em outras funções
-// const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
+const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
 
 type YoutubeInputProps = {
   initialUrl: string;
@@ -209,7 +209,7 @@ export function YoutubeInput({
       onProgressUpdate("upload", 100);
       return {
         filename_id: checkResult.video_id,
-        cached: true
+        audio_cached: true
       };
     }
 
@@ -276,18 +276,23 @@ export function YoutubeInput({
     };
   };
 
-  // Verifica se os capítulos precisam ser reprocessados baseado no tempo
-  const shouldReprocessChapters = (checkResult: any): boolean => {
-    if (!checkResult.status?.has_chapters || !checkResult.metadata?.created_at) {
-      return true;
-    }
+  // // Verifica se os capítulos precisam ser reprocessados baseado no tempo
+  // const shouldReprocessChapters = (checkResult: any): boolean => {
+  //   if (!checkResult.status?.has_chapters || !checkResult.metadata?.created_at) {
+  //     console.log("Não há capítulos ou data de criação, reprocessando");
+  //     return true;
+  //   }
 
-    const createdAt = new Date(checkResult.metadata.created_at).getTime();
-    const now = Date.now();
-    const processingTime = now - createdAt;
-    
-    return processingTime > POLLING_CONFIG.MAX_PROCESSING_TIME;
-  };
+  //   const createdAt = new Date(checkResult.metadata.created_at).getTime();
+  //   const now = Date.now();
+  //   const processingTime = now - createdAt;
+  //   console.log("processingTime", processingTime);
+  //   console.log("MAX_PROCESSING_TIME", POLLING_CONFIG.MAX_PROCESSING_TIME);
+  //   const result = processingTime > POLLING_CONFIG.MAX_PROCESSING_TIME;
+  //   console.log("shouldReprocessChapters", result);
+  //   return result;
+
+  // };
 
   // Obtém os capítulos
   const getChapters = async (filenameId: string, checkResult: any ) => {
@@ -295,9 +300,9 @@ export function YoutubeInput({
     
     try {
       // Verifica se precisa reprocessar os capítulos
-      const needsReprocessing = shouldReprocessChapters(checkResult);
+      // const needsReprocessing = shouldReprocessChapters(checkResult);
       
-      if (!needsReprocessing && checkResult.status?.has_chapters) {
+      if (checkResult.status?.has_chapters && checkResult.status?.processing_complete) {
         console.log("Capítulos encontrados no cache e ainda válidos");
         const chaptersResponse = await fetch(`${TRANSCRIBER_URL}/chapters/${filenameId}`);
         const chaptersData = await chaptersResponse.json();
@@ -310,17 +315,15 @@ export function YoutubeInput({
             chapters: chaptersData.chapters
           };
         }
-      }
-
-      if (needsReprocessing) {
+      }else{
         console.log("Iniciando novo processamento via take_transcription");
-        const confirmResult = await confirm("Iniciando geração de novos capítulos...", { title: "Processamento de Capítulos", kind: "info" });
-        if (!confirmResult) {
-          return {
-            status: PROCESSING_STATUS.BACKGROUND,
-            message: "Processamento cancelado pelo usuário."
-          };
-        }
+        // const confirmResult = await confirm("Iniciando geração de novos capítulos...", { title: "Processamento de Capítulos", kind: "info" });
+        // // if (!confirmResult) {
+        // //   return {
+        // //     status: PROCESSING_STATUS.BACKGROUND,
+        // //     message: "Processamento cancelado pelo usuário."
+        // //   };
+        // // }
         
         try {
           await invoke<string>("take_transcription", { filenameId });
@@ -383,6 +386,49 @@ export function YoutubeInput({
     onProgressUpdate(PROGRESS_STEPS.COMPLETE, 100);
   };
 
+
+  async function processTranscription(filenameId: string) {
+    try {
+      console.log("processTranscription", filenameId);
+      const transcriptionResponse = await invoke<string>("process_transcription", { filenameId });
+      const transcriptionData = JSON.parse(transcriptionResponse);
+      console.log("transcriptionData", transcriptionData);
+
+      if (transcriptionData.error) {
+        throw new Error(transcriptionData.error);
+      }
+
+      const taskId = transcriptionData.task_id;
+      
+      // Polling para verificar o status da transcrição
+      while (true) {
+        const statusResponse = await fetch(`${API_URL}/task-status/${taskId}`);
+        const statusData = await statusResponse.json();
+        console.log("statusData", statusData);
+
+        if (statusData.task_result?.result === "pending") {
+          // Aguarda 5 segundos antes de verificar novamente
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          continue;
+        }
+
+        if (statusData.task_result?.result === "timeout_get") {
+          throw new Error("Timeout ao processar a transcrição");
+        }
+
+        if (statusData.task_result?.text) {
+          return statusData.task_result.text;
+        }
+
+        throw new Error("Erro inesperado ao processar a transcrição");
+      }
+    } catch (error) {
+      console.error("Erro ao processar transcrição:", error);
+      throw error;
+    }
+  }
+    
+
   const handleGenerateClick = async () => {
     if (isLoading) return;
     
@@ -413,6 +459,13 @@ export function YoutubeInput({
       const uploadResultJson = await processFileUpload(result, checkResult);
       const filenameId = uploadResultJson["filename_id"];
       
+      if (!checkResult.status?.has_transcript) {
+        console.log("Iniciando processamento de transcrição...");
+        onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, 0);
+        await processTranscription(filenameId);
+        onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, 100);
+      }
+
       const chaptersResult = await getChapters(filenameId, checkResult);
       console.log("Chapters result:", chaptersResult);
       

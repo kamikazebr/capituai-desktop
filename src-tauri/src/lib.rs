@@ -92,6 +92,33 @@ async fn upload_audio(file_path: &str) -> Result<String, String> {
 }
 
 #[command]
+async fn process_transcription(filename_id: &str) -> Result<String, String> {
+    let url = format!(
+        "{}/process-transcription/{}",
+        TRANSCRIBE_YOUTUBE_URL, filename_id
+    );
+
+    println!(
+        "Iniciando processamento de transcrição para filename_id: {}",
+        filename_id
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to process transcription: {}", e))?;
+
+    let result = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read status response: {}", e))?;
+    println!("Result process transcription: {}", result);
+    Ok(result)
+}
+
+#[command]
 async fn take_transcription(filename_id: &str) -> Result<String, String> {
     let url = format!("{}/transcript/{}", TRANSCRIBE_YOUTUBE_URL, filename_id);
 
@@ -228,6 +255,7 @@ pub fn run() {
             download_audio,
             upload_audio,
             take_transcription,
+            process_transcription,
             start_server
         ])
         .setup(|app| {
