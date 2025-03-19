@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
+import { getUpdatedToken } from "../supabaseClient";
 import { checkServices } from "./ServiceStatus";
-
 
 // Verificar os serviços antes de começar o processo
 const services = [
@@ -26,6 +26,7 @@ type YoutubeInputProps = {
   onLoadingChange: (isLoading: boolean) => void;
   onProgressUpdate: (step: string, progress: number) => void;
   onError: (step: string, error: any) => void;
+  userSession?: any |undefined;
 }
 
 interface ChapterResponse {
@@ -49,7 +50,7 @@ const POLLING_CONFIG = {
   MAX_PROCESSING_TIME: 60 * 60 * 1000 // 1 hora em milissegundos
 } as const;
 
-const PROGRESS_STEPS = {
+export const PROGRESS_STEPS = {
   DOWNLOAD: "download",
   UPLOAD: "upload",
   CHAPTERS: "chapters",
@@ -69,7 +70,8 @@ export function YoutubeInput({
   onDownloadComplete, 
   onLoadingChange,
   onProgressUpdate,
-  onError
+  onError,
+  userSession
 }: YoutubeInputProps) {
   const [youtubeUrl, setYoutubeUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(false);
@@ -326,7 +328,10 @@ export function YoutubeInput({
         // // }
         
         try {
-          await invoke<string>("take_transcription", { filenameId });
+          console.log("userSession", userSession);
+          const updatedToken = await getUpdatedToken();
+          console.log("updatedToken", updatedToken);
+          await invoke<string>("take_transcription", { filenameId, authToken: updatedToken });
           
           // Após o processamento, fazemos polling para obter os capítulos
           console.log("Processamento completo, aguardando geração dos capítulos");
@@ -416,8 +421,8 @@ export function YoutubeInput({
           throw new Error("Timeout ao processar a transcrição");
         }
 
-        if (statusData.task_result?.text) {
-          return statusData.task_result.text;
+        if (statusData.task_result?.result === "success") {
+          return statusData.task_result;
         }
 
         throw new Error("Erro inesperado ao processar a transcrição");
@@ -460,6 +465,8 @@ export function YoutubeInput({
       const filenameId = uploadResultJson["filename_id"];
       
       if (!checkResult.status?.has_transcript) {
+        console.log("Aguardando 10 segundos antes de iniciar o processamento da transcrição...");
+        await sleep(10000); // Atraso de 10 segundos
         console.log("Iniciando processamento de transcrição...");
         onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, 0);
         await processTranscription(filenameId);

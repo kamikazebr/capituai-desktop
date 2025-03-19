@@ -32,7 +32,24 @@ function processDeepLink(url: string) {
     const code = params.get('code');
     if (code) {
       console.log('Código de autorização:', code);
-      // Implementar lógica de troca de código por token
+      // Trocar o código por uma sessão
+      supabase.auth.exchangeCodeForSession(code)
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('Erro ao trocar código por sessão:', error);
+            return;
+          }
+          
+          if (data?.session) {
+            console.log('Sessão obtida com sucesso:', data.session);
+            // Emitir um evento customizado que será capturado pelo componente App
+            window.dispatchEvent(new CustomEvent('supabase_auth_success', { detail: data.session }));
+            console.log('Evento supabase_auth_success disparado');
+          }
+        })
+        .catch((error) => {
+          console.error('Erro durante a troca de código por sessão:', error);
+        });
     }
   }
 }
@@ -63,6 +80,13 @@ function App() {
 
   useEffect(() => {
     console.log("Iniciando fluxo OAuth");
+
+    // Adicionar listener para o evento de autenticação bem-sucedida
+    const authSuccessListener = (event: CustomEvent) => {
+      console.log('Evento supabase_auth_success capturado');
+      handleLoginSuccess(event.detail);
+    };
+    window.addEventListener('supabase_auth_success', authSuccessListener as EventListener);
 
     // Verificar se o aplicativo foi aberto com um deep link
     getCurrentDeepLink()
@@ -104,6 +128,8 @@ function App() {
       // Remover o listener quando o componente for desmontado
       unlisten.then(unlistenFn => unlistenFn());
       unlistenOpenUrl.then(unlistenFn => unlistenFn());
+      // Remover o listener de autenticação
+      window.removeEventListener('supabase_auth_success', authSuccessListener as EventListener);
     };
   }, []);
 
@@ -186,7 +212,7 @@ function App() {
   };
 
   const copyToClipboard = () => {
-    const textGenByCapituAI = "Gerado por https://capituai.cc";
+    const textGenByCapituAI = "Created by capituai cc";
     const textToCopy = `${textGenByCapituAI}\n\n${transcriptionResult}\n\n${textGenByCapituAI}`;
     navigator.clipboard.writeText(textToCopy).then(() => {
       console.log('Text copied to clipboard');
@@ -311,6 +337,7 @@ function App() {
             onLoadingChange={handleLoadingChange}
             onProgressUpdate={handleProgressUpdate}
             onError={handleProcessError}
+            userSession={userSession}
           />
           
           <ProcessProgress 

@@ -18,6 +18,7 @@ const UserCredits = ({ userId }: UserCreditsProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    console.log("userId", userId)
     // Função para buscar os créditos atuais do usuário
     const fetchCredits = async (userId: string) => {
       try {
@@ -54,8 +55,11 @@ const UserCredits = ({ userId }: UserCreditsProps) => {
     // Busca inicial de créditos
     fetchCredits(userId);
 
-    // Configurar a subscrição realtime
-    const subscription = supabase
+  }, [userId]);
+
+  useEffect(() => {
+      // Configurar a subscrição realtime
+      const subscription = supabase
       .channel('credits_changes')
       .on(
         'postgres_changes',
@@ -75,11 +79,13 @@ const UserCredits = ({ userId }: UserCreditsProps) => {
       )
       .subscribe();
 
+      console.log("subscription", subscription)
+
     // Limpar a subscrição quando o componente for desmontado
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, [userId]);
+  }, [userId, setCredits])
 
   if (isLoading) {
     return <div className="user-credits loading">Carregando créditos...</div>;

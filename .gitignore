@@ -23,7 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
-
+.env
 # Added by cargo
 
 /target
+
+/supabase/
+/output/
+/transcriptions/

@@ -119,7 +119,7 @@ async fn process_transcription(filename_id: &str) -> Result<String, String> {
 }
 
 #[command]
-async fn take_transcription(filename_id: &str) -> Result<String, String> {
+async fn take_transcription(filename_id: &str, auth_token: Option<&str>) -> Result<String, String> {
     let url = format!("{}/transcript/{}", TRANSCRIBE_YOUTUBE_URL, filename_id);
 
     println!(
@@ -149,17 +149,28 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
 
     // Extract the transcript or handle errors
     if let Some(transcript) = json.get("transcript") {
-        println!("Transcrição: {}", transcript);
+        // println!("Transcrição: {}", transcript);
         let json_body_new =
             serde_json::json!({"filename_id":filename_id,"transcript":transcript.to_string()});
 
-        println!("JSON Body New: {}", json_body_new.clone());
+        // println!("JSON Body New: {}", json_body_new.clone());
 
-        // Chamada para generate-chapters
-        let new_url_chapters = format!("{}/generate-chapters", CAPITU_LANGCHAIN_URL);
-        let response = client
-            .post(&new_url_chapters)
-            .json(&json_body_new)
+        // Escolhe a URL baseado na presença do token
+        let new_url_chapters = match auth_token {
+            Some(_) => format!("{}/generate-chapters-auth", CAPITU_LANGCHAIN_URL),
+            None => format!("{}/generate-chapters", CAPITU_LANGCHAIN_URL),
+        };
+
+        println!("New URL Chapters: {}", new_url_chapters);
+
+        let mut request = client.post(&new_url_chapters).json(&json_body_new);
+
+        // Adiciona o header de autorização se o token estiver presente
+        if let Some(token) = auth_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| format!("Failed to generate chapters: {}", e))?;
@@ -168,7 +179,7 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
             .json::<Value>()
             .await
             .map_err(|e| format!("Failed to parse generate chapters response: {}", e))?;
-        println!("Result Generate Chapters: {:?}", result.clone().to_string());
+        // println!("Result Generate Chapters: {:?}", result.clone().to_string());
 
         let task_id = result
             .get("task_id")
@@ -190,7 +201,7 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
                 .json::<Value>()
                 .await
                 .map_err(|e| format!("Failed to parse task status response: {}", e))?;
-            println!("Result Full Chapters: {:?}", result.clone());
+            // println!("Result Full Chapters: {:?}", result.clone());
 
             if let Some(task_result) = result.get("task_result") {
                 if let Some(status) = task_result.get("result") {
@@ -201,9 +212,14 @@ async fn take_transcription(filename_id: &str) -> Result<String, String> {
                     } else if status == "timeout_get" {
                         println!("Result is timeout_get, waiting...");
                     } else {
-                        let text = task_result.get("text").unwrap();
-                        println!("Text: {:?}", text.as_str().unwrap());
-                        return Ok(text.to_string());
+                        let text = task_result.get("text");
+                        if let Some(text) = text {
+                            println!("Text: {:?}", text.as_str().unwrap());
+                            return Ok(text.to_string());
+                        } else {
+                            println!("Text not found in response: {}", task_result.to_string());
+                            return Err("Text not found in response.".into());
+                        }
                     }
                 } else {
                     println!("Unexpected status result");
@@ -333,7 +349,7 @@ mod tests {
     async fn test_take_transcription() {
         let filename_id = VIDEO_ID; // Use o task_id retornado pelo upload
 
-        let result = take_transcription(filename_id).await;
+        let result = take_transcription(filename_id, None).await;
         assert!(
             result.is_ok(),
             "Failed to check transcription status: {:?}",

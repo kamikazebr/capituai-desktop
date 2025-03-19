@@ -13,6 +13,8 @@ export function ProcessProgress({ currentStep, isVisible, error, onRetry }: Proc
     { id: "download", label: "Download do áudio" },
     { id: "upload", label: "Upload para servidor" },
     { id: "transcription", label: "Geração da transcrição" },
+    { id: "processando", label: "Processando" },
+    { id: "chapters", label: "Geração dos capítulos" },
     { id: "complete", label: "Processo concluído" }
   ];
   
