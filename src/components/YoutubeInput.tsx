@@ -217,7 +217,9 @@ export function YoutubeInput({
 
     onProgressUpdate("upload", 0);
     console.log("Uploading audio to server");
-    const uploadRes = await invoke<string>("upload_audio", { filePath: result });
+    const updatedToken = await getUpdatedToken();
+    console.log("updatedToken", updatedToken);
+    const uploadRes = await invoke<string>("upload_audio", { filePath: result, authToken: updatedToken });
     console.log("Upload result:", uploadRes);
     onProgressUpdate("upload", 100);
     return JSON.parse(uploadRes);
@@ -395,7 +397,9 @@ export function YoutubeInput({
   async function processTranscription(filenameId: string) {
     try {
       console.log("processTranscription", filenameId);
-      const transcriptionResponse = await invoke<string>("process_transcription", { filenameId });
+      const updatedToken = await getUpdatedToken();
+      console.log("updatedToken", updatedToken);
+      const transcriptionResponse = await invoke<string>("process_transcription", { filenameId, authToken: updatedToken });
       const transcriptionData = JSON.parse(transcriptionResponse);
       console.log("transcriptionData", transcriptionData);
 
