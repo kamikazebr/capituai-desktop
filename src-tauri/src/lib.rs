@@ -7,11 +7,92 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_oauth::start;
 use tokio::time::sleep;
 use youtube_dl::YoutubeDl;
+// use std::process::Command;
+use std::fs::File;
+// use std::io::BufReader;
+use symphonia::core::formats::FormatOptions;
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+// use symphonia::core::units::Time;
 const OUTPUT_FOLDER: &str = "../output";
 const CAPITU_LANGCHAIN_URL: &str =
     "https://kamikazebr--capitu-ai-langchain-fastapi-app-dev.modal.run";
 
 const TRANSCRIBE_YOUTUBE_URL: &str = "https://kamikazebr--transcribe-youtube-fastapi-app.modal.run";
+
+/// Extrai o ID do vídeo de uma URL do YouTube
+///
+/// Esta função extrai o ID de 11 caracteres de qualquer URL do YouTube usando o seguinte método:
+/// 1. Divide a string em partes usando caracteres inválidos como separadores
+/// 2. Procura por uma parte que tenha exatamente 11 caracteres (tamanho padrão dos IDs)
+///
+/// # Exemplos
+/// ```rust
+/// let id = extract_youtube_video_id("https://youtu.be/dQw4w9WgXcQ");
+/// assert_eq!(id, Some("dQw4w9WgXcQ".to_string()));
+///
+/// // Funciona com vários formatos de URL
+/// let id = extract_youtube_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+/// let id = extract_youtube_video_id("https://youtube.com/shorts/dQw4w9WgXcQ");
+/// let id = extract_youtube_video_id("https://youtu.be/dQw4w9WgXcQ");
+/// ```
+fn extract_youtube_video_id(url: &str) -> Option<String> {
+    // IDs do YouTube sempre têm 11 caracteres
+    // Procura por uma sequência de exatamente 11 caracteres que podem ser letras, números, - ou _
+    url.split(|c| !matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_'))
+        .find(|s| s.len() == 11)
+        .map(String::from)
+}
+
+#[command]
+fn get_audio_duration(file_path: &str) -> Result<f64, String> {
+    // Abre o arquivo
+    let file = File::open(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
+
+    // Cria o MediaSourceStream
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+    // Cria um hint para ajudar no probe do formato
+    let mut hint = Hint::new();
+    hint.with_extension("mp3");
+
+    // Usa o probe padrão do symphonia que já tem todos os formatos habilitados
+    let mut format_opts = FormatOptions::default();
+    // Habilita suporte a gapless playback que pode ajudar na precisão
+    format_opts.enable_gapless = true;
+
+    // Faz o probe do formato
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &format_opts, &MetadataOptions::default())
+        .map_err(|e| format!("Failed to probe format: {}", e))?;
+
+    // Obtém o primeiro track de áudio
+    let track = probed
+        .format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
+        .ok_or_else(|| "No valid audio track found".to_string())?;
+
+    // Tenta obter a duração das propriedades do track
+    if let Some(n_frames) = track.codec_params.n_frames {
+        if let Some(sample_rate) = track.codec_params.sample_rate {
+            let duration = (n_frames as f64) / (sample_rate as f64);
+            return Ok(duration);
+        }
+    }
+
+    // Se não conseguiu pelos frames, tenta obter a duração do formato
+    if let Some(time_base) = track.codec_params.time_base {
+        if let Some(n_frames) = track.codec_params.n_frames {
+            let duration = (n_frames as f64) * (time_base.numer as f64) / (time_base.denom as f64);
+            return Ok(duration);
+        }
+    }
+
+    Err("Could not determine duration".to_string())
+}
 
 #[command]
 async fn start_server(window: Window) -> Result<u16, String> {
@@ -25,8 +106,9 @@ async fn start_server(window: Window) -> Result<u16, String> {
 
 #[command]
 async fn download_audio(url: &str) -> Result<String, String> {
-    // Extrai o ID do vídeo da URL
-    let video_id = url.split("v=").nth(1).unwrap_or("output");
+    // Extrai o ID do vídeo da URL usando a nova função
+    let video_id = extract_youtube_video_id(url)
+        .ok_or_else(|| "URL do YouTube inválida ou ID do vídeo não encontrado".to_string())?;
     let file_path = format!("{}/{}.mp3", OUTPUT_FOLDER, video_id);
 
     // Verifica se o arquivo já existe
@@ -56,16 +138,12 @@ async fn upload_audio(file_path: &str, auth_token: &str) -> Result<String, Strin
 
     println!("Iniciando upload do arquivo: {}", file_path);
 
-    // Abre o arquivo para leitura
-    // let file = File::open(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
-
-    // Cria um formulário multipart
+    // Cria um formulário multipart apenas com o arquivo
     println!("Criando formulário multipart...");
     let form = reqwest::multipart::Form::new()
         .file("file", file_path)
         .await
         .map_err(|e| format!("Failed to create form: {}", e))?;
-    println!("Formulário criado com sucesso.");
 
     // Cria um cliente HTTP assíncrono
     let client = reqwest::Client::new();
@@ -79,7 +157,20 @@ async fn upload_audio(file_path: &str, auth_token: &str) -> Result<String, Strin
         .send()
         .await
         .map_err(|e| format!("Failed to upload file: {}", e))?;
-    println!("Requisição enviada, status: {}", response.status());
+    let response_status = response.status();
+    println!("Requisição enviada, status: {}", response_status);
+
+    // Verifica se o status é de sucesso
+    if !response_status.is_success() {
+        let error_text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read error response: {}", e))?;
+        return Err(format!(
+            "Upload failed with status {}: {}",
+            response_status, error_text
+        ));
+    }
 
     // Lê a resposta como texto de forma assíncrona
     println!("Lendo resposta do servidor...");
@@ -105,6 +196,7 @@ async fn process_transcription(filename_id: &str, auth_token: &str) -> Result<St
     );
 
     let client = reqwest::Client::new();
+
     let response = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", auth_token))
@@ -274,7 +366,8 @@ pub fn run() {
             upload_audio,
             take_transcription,
             process_transcription,
-            start_server
+            start_server,
+            get_audio_duration
         ])
         .setup(|app| {
             #[cfg(debug_assertions)] // only include this code on debug builds
@@ -402,5 +495,71 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_extract_youtube_video_id() {
+        // Testa diferentes formatos de URL do YouTube
+        let test_cases = vec![
+            // Formato padrão watch?v=
+            (
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                Some("dQw4w9WgXcQ"),
+            ),
+            // Formato curto youtu.be
+            ("https://youtu.be/dQw4w9WgXcQ", Some("dQw4w9WgXcQ")),
+            // Formato de shorts
+            (
+                "https://youtube.com/shorts/dQw4w9WgXcQ",
+                Some("dQw4w9WgXcQ"),
+            ),
+            // Com parâmetros adicionais
+            (
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+                Some("dQw4w9WgXcQ"),
+            ),
+            // Com timestamp
+            ("https://youtu.be/dQw4w9WgXcQ?t=123", Some("dQw4w9WgXcQ")),
+            // URL inválida
+            ("https://youtube.com/invalid", None),
+            // String vazia
+            ("", None),
+            // ID muito curto
+            ("https://youtu.be/abc123", None),
+            // ID muito longo
+            ("https://youtu.be/abc123456789", None),
+        ];
+
+        // Executa todos os casos de teste
+        for (input, expected) in test_cases {
+            let result = extract_youtube_video_id(input);
+            assert_eq!(
+                result.as_deref(),
+                expected,
+                "Falha ao extrair ID de '{}'. Esperado: {:?}, Obtido: {:?}",
+                input,
+                expected,
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_audio_duration() {
+        let file_path = format!("{}/kjMVWetJUXg.mp3", OUTPUT_FOLDER);
+
+        // Testa a função get_audio_duration
+        let result = get_audio_duration(&file_path);
+        assert!(result.is_ok(), "Failed to get audio duration: {:?}", result);
+
+        let duration = result.unwrap();
+        println!(
+            "Duração do áudio: {:.2} segundos ({:.2} minutos)",
+            duration,
+            duration / 60.0
+        );
+
+        // Verifica se a duração está dentro de um intervalo razoável (por exemplo, entre 1 segundo e 2 horas)
+        assert!(duration > 1.0, "Duração muito curta: {}", duration);
     }
 }

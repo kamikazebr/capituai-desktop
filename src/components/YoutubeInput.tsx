@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { message } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { getUpdatedToken } from "../supabaseClient";
+import { getUpdatedToken, supabase } from "../supabaseClient";
 import { checkServices } from "./ServiceStatus";
 
 // Verificar os serviços antes de começar o processo
@@ -19,6 +19,8 @@ const services = [
 const TRANSCRIBER_URL = services.find(s => s.name === "Transcriber")?.url || "";
 // Extraindo a URL da API do Transcriber para uso em outras funções
 const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
+
+const OUTPUT_FOLDER = "../output";
 
 type YoutubeInputProps = {
   initialUrl: string;
@@ -204,6 +206,61 @@ export function YoutubeInput({
     return await checkResponse.json();
   };
 
+  // Verifica os créditos do usuário
+  const checkUserCredits = async (filePath: string, authToken: string | null): Promise<boolean> => {
+    try {
+      if (!authToken) {
+        throw new Error("Token de autenticação não fornecido");
+      }
+      
+      // Chama a função Rust para obter a duração do áudio
+      const duration = await invoke<number>("get_audio_duration", { filePath });
+      console.log("Duração do áudio:", duration, "segundos");
+      
+      // Consulta os créditos do usuário diretamente no Supabase
+      const { data: userData, error } = await supabase
+        .from('credits')
+        .select('credits')
+        .eq('user_id', userSession?.user?.id)
+        .single();
+      
+      if (error) {
+        console.error("Erro ao consultar créditos:", error);
+        throw new Error(`Erro ao verificar créditos: ${error.message}`);
+      }
+      
+      if (!userData) {
+        await message(
+          "Não foi possível encontrar seus créditos. Por favor, entre em contato com o suporte.",
+          { title: "Erro ao Verificar Créditos", kind: "error" }
+        );
+        return false;
+      }
+      
+      // Calcula os minutos e o custo em dólares
+      const durationInMinutes = Math.ceil(duration / 60);
+      const costPerMinute = 0.04; // $0.04 por minuto
+      const requiredCredits = durationInMinutes * costPerMinute; // 1 crédito = $1
+      const hasEnoughCredits = userData.credits >= requiredCredits;
+      
+      if (!hasEnoughCredits) {
+        await message(
+          `Você não tem créditos suficientes para processar este áudio.\n\n` +
+          `Duração: ${durationInMinutes} minutos\n` +
+          `Custo: $${requiredCredits.toFixed(2)} (${durationInMinutes} min × $${costPerMinute}/min)\n` +
+          `Créditos disponíveis: ${userData.credits.toFixed(2)}`,
+          { title: "Créditos Insuficientes", kind: "error" }
+        );
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Erro ao verificar créditos:", error);
+      throw new Error(`Falha ao verificar créditos: ${error}`);
+    }
+  };
+
   // Processa o upload do arquivo
   const processFileUpload = async (result: string, checkResult: any) => {
     if (checkResult.status && checkResult.status.has_audio) {
@@ -215,9 +272,14 @@ export function YoutubeInput({
       };
     }
 
+    // Verifica os créditos antes do upload
+    const updatedToken = await getUpdatedToken();
+    if (!(await checkUserCredits(result, updatedToken))) {
+      throw new Error("Créditos insuficientes para processar o áudio");
+    }
+
     onProgressUpdate("upload", 0);
     console.log("Uploading audio to server");
-    const updatedToken = await getUpdatedToken();
     console.log("updatedToken", updatedToken);
     const uploadRes = await invoke<string>("upload_audio", { filePath: result, authToken: updatedToken });
     console.log("Upload result:", uploadRes);
@@ -396,8 +458,18 @@ export function YoutubeInput({
 
   async function processTranscription(filenameId: string) {
     try {
-      console.log("processTranscription", filenameId);
+      if (!filenameId) {
+        throw new Error("ID do arquivo não fornecido");
+      }
+      
+      // Verifica os créditos antes do processamento
       const updatedToken = await getUpdatedToken();
+      const audioPath = `${OUTPUT_FOLDER}/${filenameId}.mp3`;
+      if (!(await checkUserCredits(audioPath, updatedToken))) {
+        throw new Error("Créditos insuficientes para processar o áudio");
+      }
+
+      console.log("processTranscription", filenameId);
       console.log("updatedToken", updatedToken);
       const transcriptionResponse = await invoke<string>("process_transcription", { filenameId, authToken: updatedToken });
       const transcriptionData = JSON.parse(transcriptionResponse);
@@ -467,14 +539,26 @@ export function YoutubeInput({
       
       const uploadResultJson = await processFileUpload(result, checkResult);
       const filenameId = uploadResultJson["filename_id"];
+      if (uploadResultJson.error) {
+        console.error("Erro durante o processamento do upload:", uploadResultJson.error);
+        throw new Error(uploadResultJson.error);
+      }
+      if (!filenameId) {
+        throw new Error("ID do arquivo não foi retornado pelo servidor após o upload");
+      }
       
       if (!checkResult.status?.has_transcript) {
         console.log("Aguardando 10 segundos antes de iniciar o processamento da transcrição...");
         await sleep(10000); // Atraso de 10 segundos
         console.log("Iniciando processamento de transcrição...");
         onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, 0);
-        await processTranscription(filenameId);
-        onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, 100);
+        try {
+          await processTranscription(filenameId);
+          onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, 100);
+        } catch (transcriptionError) {
+          console.error("Erro durante o processamento da transcrição:", transcriptionError);
+          throw new Error(`Falha ao processar a transcrição: ${transcriptionError}`);
+        }
       }
 
       const chaptersResult = await getChapters(filenameId, checkResult);
