@@ -39,14 +39,9 @@ const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onLogin, authError }) => {
   
   // Estados para login com email/senha
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showRegister, setShowRegister] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  
-  // Novo estado para controlar a exibição do formulário de recuperação de senha
-  const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const startOAuthServer = async () => {
@@ -242,131 +237,6 @@ const SupabaseAuth: React.FC<SupabaseAuthProps> = ({ onLogin, authError }) => {
       setUser(null);
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
-    }
-  };
-
-  // Função para lidar com o login com email/senha
-  const handleEmailPasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage("");
-    console.log("handleEmailPasswordLogin");
-    if (!email || !password) {
-      setErrorMessage("Email e senha são obrigatórios.");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data.session) {
-        setUser(data.session.user);
-        onLogin(data.session);
-      }
-    } catch (error: any) {
-      console.error("Erro no login:", error);
-      setErrorMessage(error.message || "Erro ao fazer login. Verifique suas credenciais.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Função para registrar novo usuário com email/senha
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage("");
-    
-    if (!email || !password) {
-      setErrorMessage("Email e senha são obrigatórios.");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}`,
-          data: {
-            email_confirmed: true
-          }
-        }
-      });
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data.session) {
-        setUser(data.session.user);
-        onLogin(data.session);
-      } else if (data.user) {
-        setErrorMessage("Um email de confirmação foi enviado para o seu endereço.");
-      }
-    } catch (error: any) {
-      console.error("Erro no registro:", error);
-      setErrorMessage(error.message || "Erro ao criar conta. Tente novamente.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resendConfirmationEmail = async () => {
-    try {
-      setIsLoading(true);
-      setErrorMessage("");
-      
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email
-      });
-      
-      if (error) throw error;
-      
-      setErrorMessage("Email de confirmação reenviado com sucesso!");
-    } catch (error: any) {
-      console.error("Erro ao reenviar email:", error);
-      setErrorMessage(error.message || "Erro ao reenviar o email de confirmação.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Função para solicitar redefinição de senha
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage("");
-    
-    if (!email) {
-      setErrorMessage("Digite seu email para receber o link de recuperação.");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `capituai://${window.location.origin}`,
-      });
-      
-      if (error) throw error;
-      
-      setErrorMessage("Email de recuperação enviado! Verifique sua caixa de entrada.");
-    } catch (error: any) {
-      console.error("Erro ao solicitar redefinição de senha:", error);
-      setErrorMessage(error.message || "Erro ao enviar email de recuperação. Tente novamente.");
-    } finally {
-      setIsLoading(false);
     }
   };
 

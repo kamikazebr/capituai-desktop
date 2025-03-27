@@ -98,7 +98,7 @@ const UserCredits = ({ userId }: UserCreditsProps) => {
   return (
     <div className="user-credits">
       <span className="credits-label">Créditos disponíveis:</span>
-      <span className="credits-value">{credits?.credits ?? 0}</span>
+      <span className="credits-value">{credits?.credits.toFixed(2) ?? 0}</span>
     </div>
   );
 };

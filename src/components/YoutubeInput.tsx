@@ -280,7 +280,7 @@ export function YoutubeInput({
 
     onProgressUpdate("upload", 0);
     console.log("Uploading audio to server");
-    console.log("updatedToken", updatedToken);
+    // console.log("updatedToken", updatedToken);
     const uploadRes = await invoke<string>("upload_audio", { filePath: result, authToken: updatedToken });
     console.log("Upload result:", uploadRes);
     onProgressUpdate("upload", 100);
@@ -547,7 +547,7 @@ export function YoutubeInput({
         throw new Error("ID do arquivo não foi retornado pelo servidor após o upload");
       }
       
-      if (!checkResult.status?.has_transcript) {
+      if (!uploadResultJson["task_id"] && !checkResult.status?.has_transcript) {
         console.log("Aguardando 10 segundos antes de iniciar o processamento da transcrição...");
         await sleep(10000); // Atraso de 10 segundos
         console.log("Iniciando processamento de transcrição...");
