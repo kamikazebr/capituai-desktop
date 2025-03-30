@@ -20,12 +20,12 @@ import { supabase } from './supabaseClient'; // Ajuste o caminho conforme necess
 // Função para processar URLs de deep link
 function processDeepLink(url: string) {
   console.log('Processando deep link:', url);
-  
+
   // Se for uma URL de redirecionamento OAuth
   if (url.includes('code=') || url.includes('access_token=')) {
     // Lógica para processar o retorno do OAuth
     console.log('URL de redirecionamento OAuth detectada');
-    
+
     // Aqui você pode extrair tokens, autenticar o usuário, etc.
     // Por exemplo:
     const params = new URLSearchParams(url.split('?')[1]);
