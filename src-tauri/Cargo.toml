@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "youtube-dl-rs"]
+
 [package]
 name = "capitu-desktop"
 version = "0.1.0"
@@ -23,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12.12", features = ["json", "multipart", "stream"] }
-youtube_dl = "0.10.0"
+youtube_dl = { path = "youtube-dl-rs" }
 tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
