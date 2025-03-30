@@ -5,10 +5,10 @@ import { getUpdatedToken, supabase } from "../supabaseClient";
 import { checkServices } from "./ServiceStatus";
 
 // Verificar os serviços antes de começar o processo
-const services = [
+export const API_SERVICES = [
   {
     name: "Capitu AI",
-    url: "https://kamikazebr--capitu-ai-langchain-fastapi-app-dev.modal.run",
+    url: "https://kamikazebr--capitu-ai-langchain-fastapi-app.modal.run",
   },
   {
     name: "Transcriber",
@@ -16,11 +16,11 @@ const services = [
   },
 ];
 
-const TRANSCRIBER_URL = services.find(s => s.name === "Transcriber")?.url || "";
+const TRANSCRIBER_URL = API_SERVICES.find(s => s.name === "Transcriber")?.url || "";
 // Extraindo a URL da API do Transcriber para uso em outras funções
-const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
+const API_URL = API_SERVICES.find(s => s.name === "Capitu AI")?.url || "";
 
-const OUTPUT_FOLDER = "../output"; // TODO: Change to see if it's working on macos
+// const OUTPUT_FOLDER = "../output"; // TODO: Change to see if it's working on macos
 
 type YoutubeInputProps = {
   initialUrl: string;
@@ -28,7 +28,7 @@ type YoutubeInputProps = {
   onLoadingChange: (isLoading: boolean) => void;
   onProgressUpdate: (step: string, progress: number) => void;
   onError: (step: string, error: any) => void;
-  userSession?: any |undefined;
+  userSession?: any | undefined;
 }
 
 interface ChapterResponse {
@@ -67,9 +67,9 @@ const PROCESSING_STATUS = {
   ERROR: "error"
 } as const;
 
-export function YoutubeInput({ 
-  initialUrl, 
-  onDownloadComplete, 
+export function YoutubeInput({
+  initialUrl,
+  onDownloadComplete,
   onLoadingChange,
   onProgressUpdate,
   onError,
@@ -77,28 +77,28 @@ export function YoutubeInput({
 }: YoutubeInputProps) {
   const [youtubeUrl, setYoutubeUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Função para tentar obter a transcrição com exponential backoff
   // const pollForTranscription = async (filenameId: string, maxAttempts: number = POLLING_CONFIG.MAX_ATTEMPTS.TRANSCRIPTION): Promise<string> => {
   //   let attempt = 1;
   //   let delay = POLLING_CONFIG.INITIAL_DELAY;
-    
+
   //   while (attempt <= maxAttempts) {
   //     try {
   //       console.log(`Tentativa ${attempt}/${maxAttempts} de obter a transcrição (aguardando ${delay/1000}s)`);
   //       onProgressUpdate(PROGRESS_STEPS.TRANSCRIPTION, (attempt / maxAttempts) * 90);
-        
+
   //       const transcriptionRes = await invoke<string>("take_transcription", { filenameId });
-        
+
   //       console.log("Transcrição obtida com sucesso na tentativa", attempt);
   //       return transcriptionRes;
   //     } catch (error: any) {
   //       console.log(`Erro na tentativa ${attempt}:`, error);
-        
+
   //       if (error.toString().includes("Transcription not found") || 
   //           error.toString().includes("not found") || 
   //           error.toString().includes("still processing")) {
-          
+
   //         if (attempt < maxAttempts) {
   //           await sleep(delay);
   //           delay *= POLLING_CONFIG.BACKOFF_MULTIPLIER;
@@ -111,22 +111,22 @@ export function YoutubeInput({
   //       }
   //     }
   //   }
-    
+
   //   throw new Error(`Número máximo de tentativas (${maxAttempts}) excedido`);
   // };
-  
+
   // // Função para verificar o status da tarefa via API
   // const checkTaskStatus = async (taskId: string) => {
   //   try {
   //     const response = await fetch(`${API_URL}/task-status/${taskId}`);
   //     const data = await response.json();
-      
+
   //     console.log("Status da tarefa:", data);
-      
+
   //     // Verificar se a tarefa falhou
   //     if (data.task_result && data.task_result.result) {
   //       const resultStatus = data.task_result.result;
-        
+
   //       if (resultStatus === "failure") {
   //         onError("processamento", "O processamento do vídeo falhou no servidor.");
   //         return false;
@@ -149,7 +149,7 @@ export function YoutubeInput({
   //         return true;
   //       }
   //     }
-      
+
   //     // Se ainda estiver em andamento
   //     return null;
   //   } catch (error) {
@@ -163,31 +163,31 @@ export function YoutubeInput({
   // const pollTaskStatus = async (taskId: string) => {
   //   let attempts = 0;
   //   const maxAttempts = POLLING_CONFIG.MAX_ATTEMPTS.TASK_STATUS;
-    
+
   //   while (attempts < maxAttempts) {
   //     const status = await checkTaskStatus(taskId);
-      
+
   //     if (status === true) {
   //       return true;
   //     } else if (status === false) {
   //       return false;
   //     }
-      
+
   //     onProgressUpdate(PROGRESS_STEPS.PROCESSING, Math.min(90, attempts * 2));
-      
+
   //     await sleep(POLLING_CONFIG.TASK_STATUS_INTERVAL);
   //     attempts++;
   //   }
-    
+
   //   onError("timeout", "O tempo máximo de espera foi atingido.");
   //   return false;
   // };
 
   // Verifica serviços online
   const checkOnlineServices = async () => {
-    const serviceStatus = await checkServices(services);
+    const serviceStatus = await checkServices(API_SERVICES);
     const offlineServices = serviceStatus.filter(s => s.status === "offline");
-    
+
     if (offlineServices.length > 0) {
       const serviceNames = offlineServices.map(s => s.name).join(", ");
       await message(
@@ -212,23 +212,23 @@ export function YoutubeInput({
       if (!authToken) {
         throw new Error("Token de autenticação não fornecido");
       }
-      
+
       // Chama a função Rust para obter a duração do áudio
       const duration = await invoke<number>("get_audio_duration", { filePath });
       console.log("Duração do áudio:", duration, "segundos");
-      
+
       // Consulta os créditos do usuário diretamente no Supabase
       const { data: userData, error } = await supabase
         .from('credits')
         .select('credits')
         .eq('user_id', userSession?.user?.id)
         .single();
-      
+
       if (error) {
         console.error("Erro ao consultar créditos:", error);
         throw new Error(`Erro ao verificar créditos: ${error.message}`);
       }
-      
+
       if (!userData) {
         await message(
           "Não foi possível encontrar seus créditos. Por favor, entre em contato com o suporte.",
@@ -236,13 +236,13 @@ export function YoutubeInput({
         );
         return false;
       }
-      
+
       // Calcula os minutos e o custo em dólares
       const durationInMinutes = Math.ceil(duration / 60);
       const costPerMinute = 0.04; // $0.04 por minuto
       const requiredCredits = durationInMinutes * costPerMinute; // 1 crédito = $1
       const hasEnoughCredits = userData.credits >= requiredCredits;
-      
+
       if (!hasEnoughCredits) {
         await message(
           `Você não tem créditos suficientes para processar este áudio.\n\n` +
@@ -253,7 +253,7 @@ export function YoutubeInput({
         );
         return false;
       }
-      
+
       return true;
     } catch (error) {
       console.error("Erro ao verificar créditos:", error);
@@ -291,15 +291,15 @@ export function YoutubeInput({
   const pollForChapters = async (filenameId: string, maxAttempts: number = POLLING_CONFIG.MAX_ATTEMPTS.CHAPTERS): Promise<any> => {
     let attempt = 1;
     let delay = POLLING_CONFIG.INITIAL_DELAY;
-    
+
     while (attempt <= maxAttempts) {
       try {
-        console.log(`Tentativa ${attempt}/${maxAttempts} de obter os capítulos (aguardando ${delay/1000}s)`);
+        console.log(`Tentativa ${attempt}/${maxAttempts} de obter os capítulos (aguardando ${delay / 1000}s)`);
         onProgressUpdate(PROGRESS_STEPS.CHAPTERS, (attempt / maxAttempts) * 90);
-        
+
         const chaptersResponse = await fetch(`${TRANSCRIBER_URL}/chapters/${filenameId}`);
         const chaptersData = await chaptersResponse.json();
-        
+
         if (chaptersData.status === "completed" && chaptersData.chapters) {
           console.log("Capítulos obtidos com sucesso na tentativa", attempt);
           return {
@@ -307,7 +307,7 @@ export function YoutubeInput({
             chapters: chaptersData.chapters
           };
         }
-        
+
         if (attempt < maxAttempts) {
           await sleep(delay);
           delay *= POLLING_CONFIG.BACKOFF_MULTIPLIER;
@@ -321,7 +321,7 @@ export function YoutubeInput({
         }
       } catch (error: any) {
         console.log(`Erro na tentativa ${attempt}:`, error);
-        
+
         if (attempt < maxAttempts) {
           await sleep(delay);
           delay *= POLLING_CONFIG.BACKOFF_MULTIPLIER;
@@ -335,7 +335,7 @@ export function YoutubeInput({
         }
       }
     }
-    
+
     return {
       status: PROCESSING_STATUS.BACKGROUND,
       message: "O processamento dos capítulos está demorando mais que o normal. Você será notificado quando estiver pronto."
@@ -361,18 +361,18 @@ export function YoutubeInput({
   // };
 
   // Obtém os capítulos
-  const getChapters = async (filenameId: string, checkResult: any ) => {
+  const getChapters = async (filenameId: string, checkResult: any) => {
     onProgressUpdate(PROGRESS_STEPS.CHAPTERS, 0);
-    
+
     try {
       // Verifica se precisa reprocessar os capítulos
       // const needsReprocessing = shouldReprocessChapters(checkResult);
-      
+
       if (checkResult.status?.has_chapters && checkResult.status?.processing_complete) {
         console.log("Capítulos encontrados no cache e ainda válidos");
         const chaptersResponse = await fetch(`${TRANSCRIBER_URL}/chapters/${filenameId}`);
         const chaptersData = await chaptersResponse.json();
-        
+
         if (chaptersData.status === "completed" && chaptersData.chapters) {
           console.log("Usando capítulos do cache");
           onProgressUpdate(PROGRESS_STEPS.CHAPTERS, 100);
@@ -381,7 +381,7 @@ export function YoutubeInput({
             chapters: chaptersData.chapters
           };
         }
-      }else{
+      } else {
         console.log("Iniciando novo processamento via take_transcription");
         // const confirmResult = await confirm("Iniciando geração de novos capítulos...", { title: "Processamento de Capítulos", kind: "info" });
         // // if (!confirmResult) {
@@ -390,22 +390,22 @@ export function YoutubeInput({
         // //     message: "Processamento cancelado pelo usuário."
         // //   };
         // // }
-        
+
         try {
           console.log("userSession", userSession);
           const updatedToken = await getUpdatedToken();
           console.log("updatedToken", updatedToken);
           await invoke<string>("take_transcription", { filenameId, authToken: updatedToken });
-          
+
           // Após o processamento, fazemos polling para obter os capítulos
           console.log("Processamento completo, aguardando geração dos capítulos");
           return await pollForChapters(filenameId);
         } catch (transcriptionError: unknown) {
           console.error("Erro no take_transcription:", transcriptionError);
-          
+
           // Verifica se é um erro de quota ou rate limit
           const errorMessage = transcriptionError instanceof Error ? transcriptionError.message : String(transcriptionError);
-          
+
           if (errorMessage.includes("402")) {
             await message(
               "O limite de uso da OpenAI foi excedido. Por favor, tente novamente mais tarde ou entre em contato com o suporte.",
@@ -417,15 +417,15 @@ export function YoutubeInput({
               { title: "Muitas Requisições", kind: "warning" }
             );
           }
-          
+
           throw transcriptionError;
         }
       }
-      
+
       // Se chegou aqui sem reprocessamento, tenta polling normal
       console.log("Tentando obter capítulos via polling");
       return await pollForChapters(filenameId);
-      
+
     } catch (error) {
       console.error("Erro ao obter capítulos:", error);
       throw new Error(`Erro ao obter capítulos: ${error}`);
@@ -435,13 +435,13 @@ export function YoutubeInput({
   // Processa o resultado final
   const processResult = (result: string, chaptersResult: any, startTime: number, isFromCache: boolean) => {
     console.log("Resultado dos capítulos:", chaptersResult);
-    
+
     const endTime = Date.now();
     const timeTaken = endTime - startTime;
     const seconds = Math.floor((timeTaken / 1000) % 60);
     const minutes = Math.floor((timeTaken / 1000) / 60);
     const timeResult = `Tempo do processo: ${minutes} minutos e ${seconds} segundos${isFromCache ? ' (cache)' : ''}`;
-    
+
     if (chaptersResult.status === PROCESSING_STATUS.BACKGROUND) {
       // Se está em processamento background, mostra mensagem amigável
       message(chaptersResult.message, { title: "Processamento em Andamento", kind: "info" });
@@ -451,7 +451,7 @@ export function YoutubeInput({
       console.log("chaptersResult.chapters", chaptersResult.chapters.chapters);
       onDownloadComplete(result, chaptersResult.chapters.chapters, timeResult);
     }
-    
+
     onProgressUpdate(PROGRESS_STEPS.COMPLETE, 100);
   };
 
@@ -461,10 +461,10 @@ export function YoutubeInput({
       if (!filenameId) {
         throw new Error("ID do arquivo não fornecido");
       }
-      
+
       // Verifica os créditos antes do processamento
       const updatedToken = await getUpdatedToken();
-      const audioPath = `${OUTPUT_FOLDER}/${filenameId}.mp3`;
+      const audioPath = `${filenameId}.mp3`;
       if (!(await checkUserCredits(audioPath, updatedToken))) {
         throw new Error("Créditos insuficientes para processar o áudio");
       }
@@ -480,7 +480,7 @@ export function YoutubeInput({
       }
 
       const taskId = transcriptionData.task_id;
-      
+
       // Polling para verificar o status da transcrição
       while (true) {
         const statusResponse = await fetch(`${API_URL}/task-status/${taskId}`);
@@ -508,35 +508,35 @@ export function YoutubeInput({
       throw error;
     }
   }
-    
+
 
   const handleGenerateClick = async () => {
     if (isLoading) return;
-    
+
     try {
       setIsLoading(true);
       onLoadingChange(true);
-      
+
       if (!await checkOnlineServices()) {
         setIsLoading(false);
         onLoadingChange(false);
         return;
       }
-      
+
       const startTime = Date.now();
-      
+
       onProgressUpdate(PROGRESS_STEPS.DOWNLOAD, 0);
       console.log("Downloading audio from YouTube");
       const result = await invoke<string>("download_audio", { url: youtubeUrl });
       onProgressUpdate(PROGRESS_STEPS.DOWNLOAD, 100);
-      
+
       const filename = result.split("/").pop();
       console.log("filename", filename);
       if (!filename) throw new Error("Nome do arquivo inválido");
-      
+
       const checkResult = await checkFileCache(filename);
       console.log("checkResult", checkResult);
-      
+
       const uploadResultJson = await processFileUpload(result, checkResult);
       const filenameId = uploadResultJson["filename_id"];
       if (uploadResultJson.error) {
@@ -546,7 +546,7 @@ export function YoutubeInput({
       if (!filenameId) {
         throw new Error("ID do arquivo não foi retornado pelo servidor após o upload");
       }
-      
+
       if (!uploadResultJson["task_id"] && !checkResult.status?.has_transcript) {
         console.log("Aguardando 10 segundos antes de iniciar o processamento da transcrição...");
         await sleep(10000); // Atraso de 10 segundos
@@ -563,15 +563,15 @@ export function YoutubeInput({
 
       const chaptersResult = await getChapters(filenameId, checkResult);
       console.log("Chapters result:", chaptersResult);
-      
+
       processResult(result, chaptersResult, startTime, checkResult.status?.has_transcript || false);
-      
+
     } catch (error: unknown) {
       console.error("Erro:", error);
-      const step = (error instanceof Error) ? 
+      const step = (error instanceof Error) ?
         (error.message.includes("download") ? PROGRESS_STEPS.DOWNLOAD :
-         error.message.includes("upload") ? PROGRESS_STEPS.UPLOAD :
-         error.message.includes("capítulos") ? PROGRESS_STEPS.CHAPTERS : "unknown")
+          error.message.includes("upload") ? PROGRESS_STEPS.UPLOAD :
+            error.message.includes("capítulos") ? PROGRESS_STEPS.CHAPTERS : "unknown")
         : "unknown";
       onError(step, `Erro: ${error}`);
     } finally {
@@ -590,7 +590,7 @@ export function YoutubeInput({
         className="youtube-url-input"
         disabled={isLoading}
       />
-      <button 
+      <button
         onClick={handleGenerateClick}
         className={`generate-button ${isLoading ? 'loading' : ''}`}
         disabled={isLoading}

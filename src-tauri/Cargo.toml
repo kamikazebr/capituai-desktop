@@ -26,7 +26,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12.12", features = ["json", "multipart", "stream"] }
-youtube_dl = { path = "youtube-dl-rs" }
+youtube_dl = { path = "youtube-dl-rs", features = [
+    "downloader-rustls-tls",
+    "tokio",
+] }
 tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"

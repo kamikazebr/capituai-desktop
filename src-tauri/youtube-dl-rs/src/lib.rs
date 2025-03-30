@@ -616,6 +616,7 @@ impl YoutubeDl {
 
     fn run_process(&self, args: Vec<&str>) -> Result<ProcessResult, Error> {
         use std::io::Read;
+        use std::io::{BufRead, BufReader};
         use std::process::{Command, Stdio};
         use wait_timeout::ChildExt;
 
@@ -639,14 +640,38 @@ impl YoutubeDl {
 
         println!("Processo iniciado com PID: {}", child.id());
 
+        // Captura stdout em tempo real
         let mut stdout = Vec::new();
-        let child_stdout = child.stdout.take();
-        std::io::copy(&mut child_stdout.unwrap(), &mut stdout)?;
+        let child_stdout = child.stdout.take().unwrap();
+        let mut reader = BufReader::new(child_stdout);
+        let mut line = String::new();
 
+        println!("Iniciando captura do stdout em tempo real...");
+
+        // Lê linha por linha do stdout
+        while reader.read_line(&mut line)? > 0 {
+            // Se a linha contiver [download] ou [info], mostra em tempo real
+            if line.contains("[download]") || line.contains("[info]") {
+                println!(">> {}", line);
+            } else {
+                println!("{}", line);
+            }
+
+            // Armazena a linha no buffer final
+            stdout.extend(line.as_bytes());
+            line.clear();
+        }
+
+        println!("Captura do stdout finalizada");
+
+        // Processa o timeout se configurado
         let exit_code = if let Some(timeout) = self.process_timeout {
             println!("Aguardando processo com timeout de {:?}", timeout);
             match child.wait_timeout(timeout)? {
-                Some(status) => status,
+                Some(status) => {
+                    println!("Processo finalizado dentro do timeout");
+                    status
+                }
                 None => {
                     println!("Processo excedeu o timeout, matando...");
                     child.kill()?;
@@ -658,9 +683,14 @@ impl YoutubeDl {
             child.wait()?
         };
 
+        // Captura stderr no final
         let mut stderr = vec![];
         if let Some(mut reader) = child.stderr {
+            println!("Capturando stderr...");
             reader.read_to_end(&mut stderr)?;
+            if !stderr.is_empty() {
+                println!("stderr capturado: {}", String::from_utf8_lossy(&stderr));
+            }
         }
 
         println!("Processo finalizado com código de saída: {:?}", exit_code);
