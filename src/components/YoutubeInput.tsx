@@ -20,7 +20,7 @@ const TRANSCRIBER_URL = services.find(s => s.name === "Transcriber")?.url || "";
 // Extraindo a URL da API do Transcriber para uso em outras funções
 const API_URL = services.find(s => s.name === "Capitu AI")?.url || "";
 
-const OUTPUT_FOLDER = "../output";
+const OUTPUT_FOLDER = "../output"; // TODO: Change to see if it's working on macos
 
 type YoutubeInputProps = {
   initialUrl: string;
