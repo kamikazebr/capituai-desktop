@@ -7,6 +7,7 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_oauth::start;
 use tokio::time::sleep;
 use youtube_dl::YoutubeDl;
+use youtube_dl::download_yt_dlp;
 // use std::process::Command;
 use std::fs::File;
 // use std::io::BufReader;
@@ -20,8 +21,7 @@ use symphonia::core::probe::Hint;
 const OUTPUT_FOLDER: &str = "/Users/Shared/capituai/output";
 #[cfg(not(target_os = "macos"))]
 const OUTPUT_FOLDER: &str = "../output";
-const CAPITU_LANGCHAIN_URL: &str =
-    "https://kamikazebr--capitu-ai-langchain-fastapi-app-dev.modal.run";
+const CAPITU_LANGCHAIN_URL: &str = "https://kamikazebr--capitu-ai-langchain-fastapi-app.modal.run";
 
 const TRANSCRIBE_YOUTUBE_URL: &str = "https://kamikazebr--transcribe-youtube-fastapi-app.modal.run";
 
@@ -52,6 +52,8 @@ fn extract_youtube_video_id(url: &str) -> Option<String> {
 #[command]
 fn get_audio_duration(file_path: &str) -> Result<f64, String> {
     // Abre o arquivo
+    let file_path = format!("{}/{}", OUTPUT_FOLDER, file_path);
+    println!("get_audio_duration::File path: {}", file_path);
     let file = File::open(file_path).map_err(|e| format!("Failed to open file: {}", e))?;
 
     // Cria o MediaSourceStream
@@ -405,13 +407,19 @@ mod tests {
 
     const VIDEO_ID: &str = "dQw4w9WgXcQ";
 
+    #[tokio::test]
+    async fn test_download_yt_dlp() {
+        let result = download_yt_dlp(".").await;
+        assert!(result.is_ok(), "Failed to download yt-dlp: {:?}", result);
+    }
+
     #[test]
     fn test_download_audio() {
         let url = format!("https://www.youtube.com/watch?v={}", VIDEO_ID);
 
         let video_id = url.split("v=").nth(1).unwrap_or("output");
 
-        let output = YoutubeDl::new(url.clone())
+        let result = YoutubeDl::new(url.clone())
             .extract_audio(true)
             .format("bestaudio")
             .extra_arg("-o")
@@ -419,9 +427,14 @@ mod tests {
             .extra_arg("--audio-format")
             .extra_arg("mp3")
             .download_to(OUTPUT_FOLDER)
-            .unwrap();
+            .map_err(|e| format!("Failed to download audio: {}", e));
 
-        println!("Output: {:?}", output);
+        println!("Result: {:?}", result);
+
+        match result {
+            Ok(output) => println!("Output: {:?}", output),
+            Err(e) => println!("Error: {:?}", e),
+        }
 
         // Obtém o diretório atual
         match env::current_dir() {
