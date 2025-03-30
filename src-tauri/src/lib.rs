@@ -15,6 +15,10 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 // use symphonia::core::units::Time;
+
+#[cfg(target_os = "macos")]
+const OUTPUT_FOLDER: &str = "/Users/Shared/capituai/output";
+#[cfg(not(target_os = "macos"))]
 const OUTPUT_FOLDER: &str = "../output";
 const CAPITU_LANGCHAIN_URL: &str =
     "https://kamikazebr--capitu-ai-langchain-fastapi-app-dev.modal.run";
@@ -109,6 +113,11 @@ async fn download_audio(url: &str) -> Result<String, String> {
     // Extrai o ID do vídeo da URL usando a nova função
     let video_id = extract_youtube_video_id(url)
         .ok_or_else(|| "URL do YouTube inválida ou ID do vídeo não encontrado".to_string())?;
+
+    // Garante que o diretório de saída exista
+    std::fs::create_dir_all(OUTPUT_FOLDER)
+        .map_err(|e| format!("Failed to create output directory: {}", e))?;
+
     let file_path = format!("{}/{}.mp3", OUTPUT_FOLDER, video_id);
 
     // Verifica se o arquivo já existe
@@ -377,7 +386,7 @@ pub fn run() {
                 // window.close_devtools();
             }
 
-            #[cfg(any(target_os = "linux", target_os = "windows", windows))]
+            // #[cfg(any(target_os = "linux", target_os = "windows", windows))]
             let result = app.deep_link().register("capituai");
             if let Err(e) = result {
                 println!("Error: {:?}", e);
