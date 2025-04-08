@@ -6,8 +6,8 @@ use tauri::{command, Emitter, Manager, Window};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_oauth::start;
 use tokio::time::sleep;
+
 use youtube_dl::YoutubeDl;
-use youtube_dl::download_yt_dlp;
 // use std::process::Command;
 use std::fs::File;
 // use std::io::BufReader;
@@ -406,6 +406,7 @@ mod tests {
     use super::*;
 
     const VIDEO_ID: &str = "dQw4w9WgXcQ";
+    use youtube_dl::download_yt_dlp;
 
     #[tokio::test]
     async fn test_download_yt_dlp() {
