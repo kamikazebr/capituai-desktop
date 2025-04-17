@@ -131,12 +131,12 @@ async fn download_audio(url: &str) -> Result<String, String> {
     // Configura o youtube-dl para baixar apenas o áudio
     YoutubeDl::new(url)
         .extract_audio(true) // Define para extrair apenas o áudio
-        .format("bestaudio")
+        // .format("bestaudio")
         .extra_arg("-o")
         .extra_arg(&format!("{}.mp3", video_id)) // Usa o ID do vídeo como nome do arquivo
         .extra_arg("--audio-format")
         .extra_arg("mp3")
-        .socket_timeout("15")
+        // .socket_timeout("15")
         .download_to(OUTPUT_FOLDER)
         .map_err(|e| format!("Failed to download audio: {}", e))?;
 
